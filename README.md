@@ -6,7 +6,7 @@
 First, install the corresponding Python packages:
 
 ```bash
-pip install uftm ruff
+pip install ufmt ruff
 ```
 
 You can use the following command to check the code style issues:
