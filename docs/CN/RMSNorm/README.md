@@ -9,10 +9,13 @@ Layer Norm 是 NLP 任务中一种常见的归一化方法，旨在解决深度�
 Layer Norm 的计算过程可以公式化表示如下：
 
 $$
-\bar{a}_i = \cfrac{a_i -\mu}{\sigma}g_i\\ \mu = \cfrac{1}{n} \sum_{i=1}^{n}a_i\qquad \sigma=\sqrt{\cfrac{1}{n}\sum_{i=1}^{n}(a_i - \mu)^2}
+\begin{gather}
+\bar{a}_i = \cfrac{a_i -\mu}{\sigma}g_i \\
+\mu = \cfrac{1}{n} \sum\_{i=1}^{n}a_i \qquad \sigma=\sqrt{\cfrac{1}{n}\sum\_{i=1}^{n}(a_i - \mu)^2}
+\end{gather}
 $$
 
-其中，$a\in\mathbb{R}^n$ 表示 Layer Norm 进行归一化的向量， $\bar{a}\in\mathbb{R}^n$ 表示经过 Layer Norm 规范后的向量。 $\mu$ 和 $\sigma$ 分别表示输入向量 $a$ 的均值和方差。$g\in\mathbb{R}^n$ 是一组初始化为 $1$ 的增益系数，用来缩放归一化后的结果，来保证归一化操作不会破坏输入的信息。
+其中， $a\in\mathbb{R}^n$ 表示 Layer Norm 进行归一化的向量， $\bar{a}\in\mathbb{R}^n$ 表示经过 Layer Norm 规范后的向量。 $\mu$ 和 $\sigma$ 分别表示输入向量 $a$ 的均值和方差。 $g\in\mathbb{R}^n$ 是一组初始化为 $1$ 的增益系数，用来缩放归一化后的结果，来保证归一化操作不会破坏输入的信息。
 
 ## Why RMSNorm？
 
@@ -21,11 +24,13 @@ Layer Norm 成功地应用于不同深度神经网络，帮助稳定网络训练
 RMSNorm 在对输入做归一化时只进行缩放操作，缩放系数为均方根，公式可以表示如下：
 
 $$
-\bar{a}_i = \cfrac{a_i}{\textbf{RMS}(\mathbf{a})}g_i,\qquad\textbf{RMS}(\mathbf{a})=\sqrt{\cfrac{1}{n}\sum_{i=1}^{n}a_{i}^{2}}
+\begin{gather}
+\bar{a}_i = \cfrac{a_i}{\textbf{RMS}(\mathbf{a})}g_i,\qquad \textbf{RMS}(\mathbf{a})=\sqrt{\cfrac{1}{n}\sum\_{i=1}^{n}a\_{i}^{2}}
+\end{gather}
 $$
 
 
-其中，$\textbf{RMS}(a)$ 表示输入张量 $a\in\mathbb{R}^n$ 的均方根。相较于Layer Norm，RMSNorm 无需计算均值，用均方根代替方差时也自然无需减去均值。
+其中， $\textbf{RMS}(a)$ 表示输入张量 $a\in\mathbb{R}^n$ 的均方根。相较于 Layer Norm，RMSNorm 无需计算均值，用均方根代替方差时也自然无需减去均值。
 
 
 
