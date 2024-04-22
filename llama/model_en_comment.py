@@ -18,7 +18,7 @@ from torch import nn
 
 @dataclass
 class ModelArgs:
-    """Model Args."""
+    """Model Arguments."""
 
     dim: int = 4096
     n_layers: int = 32

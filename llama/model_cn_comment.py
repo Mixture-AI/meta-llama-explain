@@ -43,7 +43,7 @@ class RMSNorm(torch.nn.Module):
 
         Args:
             dim (int): 输入张量的维度.
-            eps (float, optional): 保证数值稳定性在分母上添加的极小数值. 默认设为 1e-6.
+            eps (float, optional): 为保证数值稳定性, 在分母上添加的极小数值. 默认设为 1e-6.
 
         Attributes:
             eps (float): 保证数值稳定性在分母上添加的极小数值.
