@@ -1,4 +1,4 @@
-# Meta-llama2-explain
+# meta-llama2-explain
 
 ## Goal
 
