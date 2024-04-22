@@ -39,15 +39,15 @@ class RMSNorm(torch.nn.Module):
     """RMSNorm, 参考：docs/CN/RMSNorm."""
 
     def __init__(self, dim: int, eps: float = 1e-6):
-        """Initialize the RMSNorm normalization layer.
+        """初始化 RMSNorm 归一化层.
 
         Args:
-            dim (int): The dimension of the input tensor.
-            eps (float, optional): A small value added to the denominator for numerical stability. Default is 1e-6.
+            dim (int): 输入张量的维度.
+            eps (float, optional): 保证数值稳定性在分母上添加的极小数值. 默认设为 1e-6.
 
         Attributes:
-            eps (float): A small value added to the denominator for numerical stability.
-            weight (nn.Parameter): Learnable scaling parameter.
+            eps (float): 保证数值稳定性在分母上添加的极小数值.
+            weight (nn.Parameter): 可学习的缩放系数, 对应docs/CN/RMSNorm 中的增益系数.
 
         """
         super().__init__()
@@ -55,29 +55,32 @@ class RMSNorm(torch.nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def _norm(self, x):
-        """Apply the RMSNorm normalization to the input tensor.
+        """对输入张量应用 RMSNorm 归一化.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): 输入张量.
 
         Returns:
-            torch.Tensor: The normalized tensor.
+            torch.Tensor: 归一化后的张量.
 
         """
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        # 对张量的每个元素除以其均方根, 加入 eps 保证其开方为正数.
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) 
 
     def forward(self, x):
-        """Forward pass through the RMSNorm layer.
+        """RMSNorm 层的前向过程.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): 输入张量.
 
         Returns:
-            torch.Tensor: The output tensor after applying RMSNorm.
+            torch.Tensor: 应用 RMSNorm 归一化层后的张量.
 
         """
+        # 执行 RMSNorm 归一化.
         output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+        # 对结果乘上学习的增益系数完成整个 RMSNorm.
+        return output * self.weight 
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):

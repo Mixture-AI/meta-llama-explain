@@ -18,7 +18,7 @@ from torch import nn
 
 @dataclass
 class ModelArgs:
-    """模型参数."""
+    """Model Args."""
 
     dim: int = 4096
     n_layers: int = 32
@@ -36,14 +36,15 @@ class ModelArgs:
 
 
 class RMSNorm(torch.nn.Module):
-    """RMSNorm, 参考：docs/CN/RMSNorm."""
+    """RMSNorm, refer to docs/EN/RMSNorm."""
 
     def __init__(self, dim: int, eps: float = 1e-6):
         """Initialize the RMSNorm normalization layer.
 
         Args:
             dim (int): The dimension of the input tensor.
-            eps (float, optional): A small value added to the denominator for numerical stability. Default is 1e-6.
+            eps (float, optional): A small value added to the denominator for numerical stability.
+                Default is 1e-6.
 
         Attributes:
             eps (float): A small value added to the denominator for numerical stability.
@@ -83,8 +84,8 @@ class RMSNorm(torch.nn.Module):
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     """Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
 
-    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim'
-    and the end index 'end'. The 'theta' parameter scales the frequencies.
+    This function calculates a frequency tensor with complex exponentials using the given dimension
+    'dim' and the end index 'end'. The 'theta' parameter scales the frequencies.
     The returned tensor contains complex values in complex64 data type.
 
     Args:
@@ -135,10 +136,10 @@ def apply_rotary_emb(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Apply rotary embeddings to input tensors using the given frequency tensor.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
-    frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
-    is reshaped for broadcasting compatibility. The resulting tensors contain rotary embeddings and are
-    returned as real tensors.
+    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the
+    provided frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and
+    the frequency tensor is reshaped for broadcasting compatibility. The resulting tensors contain
+    rotary embeddings and are returned as real tensors.
 
     Args:
         xq (torch.Tensor): Query tensor to apply rotary embeddings.
@@ -146,7 +147,8 @@ def apply_rotary_emb(
         freqs_cis (torch.Tensor): Precomputed frequency tensor for complex exponentials.
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
+        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with
+            rotary embeddings.
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
@@ -330,7 +332,8 @@ class FeedForward(nn.Module):
             dim (int): Input dimension.
             hidden_dim (int): Hidden dimension of the feedforward layer.
             multiple_of (int): Value to ensure hidden dimension is a multiple of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension. Defaults to None.
+            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension.
+                Defaults to None.
 
         Attributes:
             w1 (ColumnParallelLinear): Linear transformation for the first layer.
