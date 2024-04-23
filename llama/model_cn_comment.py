@@ -1,5 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-# This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
+# This software may be used and distributed according to the terms of the Llama 2 Community License
+# Agreement.
 
 import math
 from dataclasses import dataclass
@@ -39,15 +40,15 @@ class RMSNorm(torch.nn.Module):
     """RMSNorm, 参考：docs/CN/RMSNorm."""
 
     def __init__(self, dim: int, eps: float = 1e-6):
-        """Initialize the RMSNorm normalization layer.
+        """初始化 RMSNorm 归一化层.
 
         Args:
-            dim (int): The dimension of the input tensor.
-            eps (float, optional): A small value added to the denominator for numerical stability. Default is 1e-6.
+            dim (int): 输入张量的维度.
+            eps (float, optional): 为保证数值稳定性, 在分母上添加的极小数值. 默认设为 1e-6.
 
         Attributes:
-            eps (float): A small value added to the denominator for numerical stability.
-            weight (nn.Parameter): Learnable scaling parameter.
+            eps (float): 为保证数值稳定性, 在分母上添加的极小数值.
+            weight (nn.Parameter): 可学习的缩放系数, 对应docs/CN/RMSNorm 中的增益系数.
 
         """
         super().__init__()
@@ -55,36 +56,40 @@ class RMSNorm(torch.nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def _norm(self, x):
-        """Apply the RMSNorm normalization to the input tensor.
+        """对输入张量应用 RMSNorm 归一化.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): 输入张量.
 
         Returns:
-            torch.Tensor: The normalized tensor.
+            torch.Tensor: 归一化后的张量.
 
         """
+        # 对张量的每个元素除以其均方根, 加入 eps 保证其开方为正数.
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
 
     def forward(self, x):
-        """Forward pass through the RMSNorm layer.
+        """RMSNorm 层的前向过程.
 
         Args:
-            x (torch.Tensor): The input tensor.
+            x (torch.Tensor): 输入张量.
 
         Returns:
-            torch.Tensor: The output tensor after applying RMSNorm.
+            torch.Tensor: 应用 RMSNorm 归一化层后的张量.
 
         """
+        # TODO [NAN] https://github.com/keli-wen/meta-llama2-explain/issues/7
+        # 执行 RMSNorm 归一化.
         output = self._norm(x.float()).type_as(x)
+        # 对结果乘上学习的增益系数完成整个 RMSNorm.
         return output * self.weight
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     """Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
 
-    This function calculates a frequency tensor with complex exponentials using the given dimension 'dim'
-    and the end index 'end'. The 'theta' parameter scales the frequencies.
+    This function calculates a frequency tensor with complex exponentials using the given dimension
+    'dim' and the end index 'end'. The 'theta' parameter scales the frequencies.
     The returned tensor contains complex values in complex64 data type.
 
     Args:
@@ -135,10 +140,10 @@ def apply_rotary_emb(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Apply rotary embeddings to input tensors using the given frequency tensor.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
-    frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
-    is reshaped for broadcasting compatibility. The resulting tensors contain rotary embeddings and are
-    returned as real tensors.
+    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the
+    provided frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and
+    the frequency tensor is reshaped for broadcasting compatibility. The resulting tensors contain
+    rotary embeddings and are returned as real tensors.
 
     Args:
         xq (torch.Tensor): Query tensor to apply rotary embeddings.
@@ -146,7 +151,8 @@ def apply_rotary_emb(
         freqs_cis (torch.Tensor): Precomputed frequency tensor for complex exponentials.
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
+        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with
+            rotary embeddings.
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
@@ -330,7 +336,8 @@ class FeedForward(nn.Module):
             dim (int): Input dimension.
             hidden_dim (int): Hidden dimension of the feedforward layer.
             multiple_of (int): Value to ensure hidden dimension is a multiple of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension. Defaults to None.
+            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension.
+                Defaults to None.
 
         Attributes:
             w1 (ColumnParallelLinear): Linear transformation for the first layer.
@@ -474,8 +481,9 @@ class Transformer(nn.Module):
         )
 
         self.freqs_cis = precompute_freqs_cis(
-            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096.
-            # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
+            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the
+            # Llama 2 generation of models is 4096. Adding this multiplier instead of using 4096
+            # directly allows for dynamism of token lengths while training or fine-tuning.
             self.params.dim // self.params.n_heads,
             self.params.max_seq_len * 2,
         )
