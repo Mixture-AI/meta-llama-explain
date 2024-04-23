@@ -456,7 +456,7 @@ def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
         p (float): 用于 top-p 采样的概率阈值.
 
     Returns:
-        torch.Tensor: 采样后的 token 索引. Shape: (B, 1).
+        torch.Tensor: 采样后的 token 索引. Shape: (batch_size, 1).
 
     Note:
         Top-p 采样选择的是其累积概率超过阈值 p 的最小 token 集合.
