@@ -5,8 +5,11 @@ line-length = 80
 profile = "black"
 
 [tool.ruff.lint]
-select = ["D"]
+select = ["D", "W505"]
 ignore = ["D100", "D102", "D104", "D105", "D107", "D203", "D213", "D401", "D402"]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 100
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
