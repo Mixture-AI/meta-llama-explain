@@ -76,7 +76,7 @@ class Llama:
             max_batch_size (int): Maximum batch size for inference.
             model_parallel_size (Optional[int], optional): Number of model parallel processes.
                 If not provided, it's determined from the environment. Defaults to None.
-            seed (int, optional): Random seed for reproducibility. Defaults to 1.
+            seed (int, optional): Random seed for  reproducibility. Defaults to 1.
 
         Returns:
             Llama: An instance of the Llama class with the loaded model and tokenizer.
@@ -100,7 +100,7 @@ class Llama:
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
 
-        # `seed` must be the same in all processes.
+        # seed must be the same in all processes
         torch.manual_seed(seed)
 
         if local_rank > 0:
