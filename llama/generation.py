@@ -445,26 +445,48 @@ class Llama:
         ]
 
 
-def sample_top_p(probs, p):
+def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
     """Perform top-p (nucleus) sampling on a probability distribution.
 
     Args:
-        probs (torch.Tensor): Probability distribution tensor.
+        probs (torch.Tensor): Probability distribution tensor. Shape: (batch_size, vocab_size).
         p (float): Probability threshold for top-p sampling.
 
     Returns:
-        torch.Tensor: Sampled token indices.
+        torch.Tensor: Sampled token indices. Shape: (batch_size, 1).
 
     Note:
         Top-p sampling selects the smallest set of tokens whose cumulative probability mass
         exceeds the threshold p. The distribution is renormalized based on the selected tokens.
 
     """
+    # Sort in descending order because nucleus sampling selects the token set from highest
+    # to lowest probability.
     probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
+
+    # Calculate the cumulative sum of probabilities.
+    # This is to quickly perform subtraction later to determine if a token is within the
+    # top-p (nucleus) set.
     probs_sum = torch.cumsum(probs_sort, dim=-1)
+
+    # Create a mask to exclude the tokens that their cumulative probabilities exceed the
+    # threshold p.
     mask = probs_sum - probs_sort > p
+
+    # Set the probabilities of the excluded tokens to 0.
     probs_sort[mask] = 0.0
+
+    # Renormalize the distribution.
+    # eg. [0.2, 0.2, 0.2, 0.2] / 0.8 -> [0.25, 0.25, 0.25, 0.25].
+    # The `div_` method is an in-place operation.
     probs_sort.div_(probs_sort.sum(dim=-1, keepdim=True))
+
+    # Sample a token from the renormalized distribution.
+    # The `multinomial` method samples a token index from the multinomial distribution.
     next_token = torch.multinomial(probs_sort, num_samples=1)
+
+    # Gather the sampled token index from the original index tensor.
     next_token = torch.gather(probs_idx, -1, next_token)
+
+    # Return the sampled token index.
     return next_token

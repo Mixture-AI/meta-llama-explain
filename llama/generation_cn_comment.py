@@ -445,26 +445,46 @@ class Llama:
         ]
 
 
-def sample_top_p(probs, p):
-    """Perform top-p (nucleus) sampling on a probability distribution.
+def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
+    """对概率分布进行 top-p (nucleus) 采样.
+
+    推荐阅读: https://github.com/keli-wen/AGI-Study/blob/master/inference/Basic-LLM-Inference.md
+    #top-pnucleus-sampling
 
     Args:
-        probs (torch.Tensor): Probability distribution tensor.
-        p (float): Probability threshold for top-p sampling.
+        probs (torch.Tensor): 概率分布张量. Shape: (batch_size, vocab_size).
+        p (float): 用于 top-p 采样的概率阈值.
 
     Returns:
-        torch.Tensor: Sampled token indices.
+        torch.Tensor: 采样后的 token 索引. Shape: (batch_size, 1).
 
     Note:
-        Top-p sampling selects the smallest set of tokens whose cumulative probability mass
-        exceeds the threshold p. The distribution is renormalized based on the selected tokens.
-
+        Top-p 采样选择的是其累积概率超过阈值 p 的最小 token 集合.
+        据选定的 token 重新规范化概率分布.
     """
+    # 对概率进行降序排序. 降序是因为 nucleus 是按概率从大到小选择 token 集合.
     probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
+
+    # 计算累积概率. 这是为了后续快速做差分然后判断 token 是否在 top-p 集合中.
     probs_sum = torch.cumsum(probs_sort, dim=-1)
+
+    # 创建一个掩码, 排除累积概率超过阈值 p 的部分, 所以需要减去当前概率判断是否已经超过阈值.
     mask = probs_sum - probs_sort > p
+
+    # 使用掩码将超过阈值的 tokens 概率设置为 0.
     probs_sort[mask] = 0.0
+
+    # 对筛选后的概率重新规范化.
+    # eg. [0.2, 0.2, 0.2, 0.2] /0.8 -> [0.25, 0.25, 0.25, 0.25].
+    # `div_` 方法是原地操作, 将规范化后的概率分布保存在 probs_sort 中.
     probs_sort.div_(probs_sort.sum(dim=-1, keepdim=True))
+
+    # 从规范化的后的概率分布中采样一个 token.
+    # `torch.multinomial` 方法是从多项分布中采样, 返回的是采样的索引.
     next_token = torch.multinomial(probs_sort, num_samples=1)
+
+    # 根据采样的索引找到对应的原始索引.
     next_token = torch.gather(probs_idx, -1, next_token)
+
+    # 返回采样得到的 token 索引.
     return next_token
