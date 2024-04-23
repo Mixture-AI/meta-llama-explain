@@ -452,14 +452,14 @@ def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
     #top-pnucleus-sampling
 
     Args:
-        probs (torch.Tensor): 概率分布张量. Shape: (B, vocab_size).
+        probs (torch.Tensor): 概率分布张量. Shape: (batch_size, vocab_size).
         p (float): 用于 top-p 采样的概率阈值.
 
     Returns:
         torch.Tensor: 采样后的 token 索引. Shape: (B, 1).
 
     Note:
-        Top-p 采样选择的是, 其累积概率超过阈值 p 的最小 token 集合.
+        Top-p 采样选择的是其累积概率超过阈值 p 的最小 token 集合.
         据选定的 token 重新规范化概率分布.
     """
     # 对概率进行降序排序. 降序是因为 nucleus 是按概率从大到小选择 token 集合.
