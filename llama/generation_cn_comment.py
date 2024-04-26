@@ -112,7 +112,10 @@ class Llama:
         # 设置当前进程的 CUDA 设备号.
         torch.cuda.set_device(local_rank)
 
+        # TODO [keli]: Refer to https://github.com/meta-llama/llama/issues/1114
         # 在所有进程中设定相同的随机种子以保证实验/任务的可重复性.
+        # https://pytorch.org/docs/stable/notes/randomness.html#pytorch-random-number-generator
+        # 尽管有些博客中说 torch.manual_seed 只能 seed CPU, 但实际上它也会 seed GPU.
         torch.manual_seed(seed)
 
         # 如果不是主进程, 则屏蔽标准输出, 防止多进程输出冗余信息.
@@ -171,7 +174,7 @@ class Llama:
 
         # 通过 checkpoint 加载模型参数.
         # Q: 为什么要设置 strict=False?
-        # A: strict=False 表示允许加载不完全匹配的模型参数, 有些参数可能不在当前模型中, 
+        # A: strict=False 表示允许加载不完全匹配的模型参数, 模型的部分参数不在 checkpoint 中,
         # 但不影响加载. 出现不完全匹配的原因是因为我们可能处于模型并行的环境中.
         model.load_state_dict(checkpoint, strict=False)
 
