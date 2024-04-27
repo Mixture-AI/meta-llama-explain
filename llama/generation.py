@@ -90,45 +90,99 @@ class Llama:
             and loads the pre-trained model and tokenizer.
 
         """
+        # Check if the torch distributed environment is not initialized.
         if not torch.distributed.is_initialized():
+            # Initialize the process group for distributed operations using the NCCL backend.
             torch.distributed.init_process_group("nccl")
+
+        # Check if model parallel is initialized.
         if not model_parallel_is_initialized():
             if model_parallel_size is None:
+                # Get the model parallel size from the environment.
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
+            # Initialize model parallel.
             initialize_model_parallel(model_parallel_size)
 
+        # Get the local rank from the environment.
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+        # Set the device to the local rank.
         torch.cuda.set_device(local_rank)
 
+        # TODO [keli]: Refer to https://github.com/meta-llama/llama/issues/1114
         # `seed` must be the same in all processes.
         torch.manual_seed(seed)
 
+        # If not the master process, redirect stdout to /dev/null.
         if local_rank > 0:
+            # os.devnull is the null device, which is used to discard output.
             sys.stdout = open(os.devnull, "w")
 
+        # Start the timer.
         start_time = time.time()
+
+        # Get the checkpoint files from the specified directory.
+        # Q: Why sort the checkpoints?
+        # A: To ensure that the model parallel rank matches the checkpoint index.
+        # (Premise: The checkpoint filenames follow a format similar to 0.pth, 1.pth, and so on.)
         checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
+
+        # Check if checkpoint files are found.
         assert len(checkpoints) > 0, f"no checkpoint files found in {ckpt_dir}"
+
+        # Check if the model parallel size matches the number of checkpoint files.
+        # Q: Why do we need to check this? Why each process needs to load a different checkpoint?
+        # A: Since we are using model parallelism, a big model is split into multiple parts and
+        # each part is loaded by a different process.
         assert model_parallel_size == len(
             checkpoints
         ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {model_parallel_size}"
+
+        # Get the checkpoint path for the current model parallel rank.
         ckpt_path = checkpoints[get_model_parallel_rank()]
+
+        # Load the checkpoint into CPU memory.
+        # Q: Why load the checkpoint into CPU memory instead of GPU memory?
+        # A: Personal guess is to unify the output device, ensuring the output is definitely on the
+        # CPU. This improves compatibility and makes it easier for users. Otherwise, you can't
+        # predict the output device, it could be the current process's GPU or another process's GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
+
+        # Load the parameters related to the construction of the model.
         with open(Path(ckpt_dir) / "params.json", "r") as f:
             params = json.loads(f.read())
 
+        # Construct the model arguments.
         model_args: ModelArgs = ModelArgs(
             max_seq_len=max_seq_len,
             max_batch_size=max_batch_size,
             **params,
         )
+
+        # Load the tokenizer.
         tokenizer = Tokenizer(model_path=tokenizer_path)
+
+        # Set the vocabulary size in the model arguments.
         model_args.vocab_size = tokenizer.n_words
+
+        # Set the default tensor type to half precision (fp16).
         torch.set_default_tensor_type(torch.cuda.HalfTensor)
+
+        # Construct the model with the model arguments.
         model = Transformer(model_args)
+
+        # Load the model state dictionary from the checkpoint.
+        # Q: Why do we use strict=False?
+        # A: When strict=False, it allows loading model parameters even if they do not perfectly
+        # match the checkpoint. Some of the model's parameters may not be present in the
+        # checkpoint, but it won't affect the loading process. Partial mismatches can occur when
+        # we're in a model parallel environment.
         model.load_state_dict(checkpoint, strict=False)
+
+        # Print the time taken to load the model.
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
 
+        # Return the constructed Llama instance.
         return Llama(model, tokenizer)
 
     def __init__(self, model: Transformer, tokenizer: Tokenizer):
