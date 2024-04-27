@@ -67,69 +67,123 @@ class Llama:
         model_parallel_size: Optional[int] = None,
         seed: int = 1,
     ) -> "Llama":
-        """Build a Llama instance by initializing and loading a pre-trained model.
+        """通过初始化和加载预训练模型来构建一个 Llama 实例.
 
         Args:
-            ckpt_dir (str): Path to the directory containing checkpoint files.
-            tokenizer_path (str): Path to the tokenizer file.
-            max_seq_len (int): Maximum sequence length for input text.
-            max_batch_size (int): Maximum batch size for inference.
-            model_parallel_size (Optional[int], optional): Number of model parallel processes.
-                If not provided, it's determined from the environment. Defaults to None.
-            seed (int, optional): Random seed for  reproducibility. Defaults to 1.
+            ckpt_dir (str): 包含 checkpoint 文件的目录的路径.
+            tokenizer_path (str): 分词器文件的路径.
+            max_seq_len (int): 输入文本 (prompt) 的最长序列长度.
+            max_batch_size (int): 推理阶段能接受的最大 batch 大小.
+            model_parallel_size (Optional[int], optional): 模型并行的进程数.
+                如果未提供, 则从环境中确定. 默认值为 None.
+            seed (int, optional): 随机种子，用于结果复现. 默认种子为 1.
 
         Returns:
-            Llama: An instance of the Llama class with the loaded model and tokenizer.
+            Llama: 一个加载了模型和分词器的 Llama 类实例.
 
         Raises:
-            AssertionError: If there are no checkpoint files in the specified directory,
-                or if the model parallel size does not match the number of checkpoint files.
+            AssertionError: 如果指定目录中没有对应的 checkpoint 文件,
+                或者模型并行大小与 checkpoint 文件数量不匹配则会报错.
 
         Note:
-            This method initializes the distributed process group, sets the device to CUDA,
-            and loads the pre-trained model and tokenizer.
+            此函数主要负责:
+                1) 初始化分布式进程组.
+                2) 设定进程对应的 CUDA 设备号.
+                3) 加载预训练好的模型和分词器.
 
         """
+        # 初始化分布式处理, 如果尚未初始化.
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group("nccl")
+            # 使用 NCCL 后端初始化.
+            torch.distributed.init_process_group("nccl") 
+
+        # 检查并初始化模型并行.
         if not model_parallel_is_initialized():
             if model_parallel_size is None:
+                # 从环境变量中获取 world size (理解为总进程数).
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
+            # 初始化模型并行处理.
             initialize_model_parallel(model_parallel_size)
 
+        # 获取当前进程的 local rank (理解为当前机器的进程编号)
+        # 之所以有前缀 local 是因为在多机多卡的情况下, 每台机器的 local rank 是从 0 开始的.
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+        # 设置当前进程的 CUDA 设备号.
         torch.cuda.set_device(local_rank)
 
-        # seed must be the same in all processes
+        # TODO [keli]: Refer to https://github.com/meta-llama/llama/issues/1114
+        # 在所有进程中设定相同的随机种子以保证实验/任务的可重复性.
+        # https://pytorch.org/docs/stable/notes/randomness.html#pytorch-random-number-generator
+        # 尽管有些博客中说 torch.manual_seed 只能 seed CPU, 但实际上它也会 seed GPU.
         torch.manual_seed(seed)
 
+        # 如果不是主进程, 则屏蔽标准输出, 防止多进程输出冗余信息.
         if local_rank > 0:
+            # os.devnull 是一个特殊文件, 用于丢弃输出.
             sys.stdout = open(os.devnull, "w")
 
+        # 开始计时, 用来统计加载时间.
         start_time = time.time()
+
+        # 加载所有 checkpoint 文件路径.
         checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
+    
+        # 检查 checkpoint 文件是否存在.
         assert len(checkpoints) > 0, f"no checkpoint files found in {ckpt_dir}"
+
+        # 检查 checkpoint 文件数量是否与模型并行数匹配.
+        # Q: 为什么要检查模型并行数和检查点数量是否匹配? 为什么要每个进程加载一个检查点?
+        # A: 注意到这里是模型并行, 一个大型的模型被分割成多个部分, 每个部分由一个进程负责.
         assert model_parallel_size == len(
             checkpoints
         ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {model_parallel_size}"
+
+        # 获取当前进程对应的 checkpoint 文件路径.
+        # (因为模型并行, 每个进程加载一个对应的 checkpoint 文件.)
         ckpt_path = checkpoints[get_model_parallel_rank()]
+        
+        # 加载 checkpoint 文件到 CPU.
+        # Q: 为什么要加载到 CPU? 为什么不直接加载到 GPU?
+        # A: 个人猜测是为了统一输出 device，保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
+        # 否则你无法预期输出的 device 是什么, 有可能是当前进程的 GPU, 也有可能是其他进程的 GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
+
+        # 读取模型构造相关参数.
         with open(Path(ckpt_dir) / "params.json", "r") as f:
             params = json.loads(f.read())
 
+        # 根据参数构建模型参数对象 (包括一些 generation 时需要的参数).
         model_args: ModelArgs = ModelArgs(
             max_seq_len=max_seq_len,
             max_batch_size=max_batch_size,
             **params,
         )
+
+        # 加载分词器.
         tokenizer = Tokenizer(model_path=tokenizer_path)
+
+        # 更新模型参数重的词汇表大小.
         model_args.vocab_size = tokenizer.n_words
+
+        # 设置默认张量类型为半精度浮点数 (fp16) .
         torch.set_default_tensor_type(torch.cuda.HalfTensor)
+
+        # 创建 Transformer 模型实例.
         model = Transformer(model_args)
+
+        # 通过 checkpoint 加载模型参数.
+        # Q: 为什么要设置 strict=False?
+        # A: strict=False 表示允许加载不完全匹配的模型参数, 模型的部分参数不在 checkpoint 中,
+        # 但不影响加载. 出现不完全匹配的原因是因为我们可能处于模型并行的环境中.
         model.load_state_dict(checkpoint, strict=False)
+
+        # 输出加载的时间开销.
         print(f"Loaded in {time.time() - start_time:.2f} seconds")
 
+        # 返回构建好的 Llama 实例.
         return Llama(model, tokenizer)
+
 
     def __init__(self, model: Transformer, tokenizer: Tokenizer):
         self.model = model
