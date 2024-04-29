@@ -92,7 +92,7 @@ class Llama:
                 3) 加载预训练好的模型和分词器.
 
         """
-        # 检查 torch 分布式环境是否未初始化.
+        # 检查 Pytorch 分布式环境是否未初始化.
         if not torch.distributed.is_initialized():
             # 使用 NCCL 后端初始化.
             torch.distributed.init_process_group("nccl")
