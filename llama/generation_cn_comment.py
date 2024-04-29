@@ -92,10 +92,10 @@ class Llama:
                 3) 加载预训练好的模型和分词器.
 
         """
-        # 初始化分布式处理, 如果尚未初始化.
+        # 检查 Pytorch 分布式环境是否未初始化.
         if not torch.distributed.is_initialized():
             # 使用 NCCL 后端初始化.
-            torch.distributed.init_process_group("nccl") 
+            torch.distributed.init_process_group("nccl")
 
         # 检查并初始化模型并行.
         if not model_parallel_is_initialized():
@@ -127,8 +127,11 @@ class Llama:
         start_time = time.time()
 
         # 加载所有 checkpoint 文件路径.
+        # Q: 为什么要排序呢?
+        # A: 排序是为了保证使用模型并行索引能够正确加载对应的 checkpoint 文件.
+        # (前提是 checkpoint 文件名是类似于 0.pth, 1.pth 这样的格式.)
         checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
-    
+
         # 检查 checkpoint 文件是否存在.
         assert len(checkpoints) > 0, f"no checkpoint files found in {ckpt_dir}"
 
@@ -142,7 +145,7 @@ class Llama:
         # 获取当前进程对应的 checkpoint 文件路径.
         # (因为模型并行, 每个进程加载一个对应的 checkpoint 文件.)
         ckpt_path = checkpoints[get_model_parallel_rank()]
-        
+
         # 加载 checkpoint 文件到 CPU.
         # Q: 为什么要加载到 CPU? 为什么不直接加载到 GPU?
         # A: 个人猜测是为了统一输出 device，保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
@@ -183,7 +186,6 @@ class Llama:
 
         # 返回构建好的 Llama 实例.
         return Llama(model, tokenizer)
-
 
     def __init__(self, model: Transformer, tokenizer: Tokenizer):
         self.model = model
