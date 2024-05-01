@@ -85,9 +85,11 @@ fs_init.get_model_parallel_world_size()
 *Class* `RowParallelLinear`
 
 **功能**：按**行**去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**行**进行切分，**同时，输入 $X$ 则需要沿着列进行切分（显然，这样才能保证计算是能正确执行的）**。
+
 $$
 A = \begin{bmatrix} A_1 \\ \vdots  \\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
+
 这里同样做了一个简单的示意图，包含了我们是如何切分 `weight` 和 `input`，帮助你理解 RowParallelLinear 是如何进行 `forward` 操作。
 
 ![RowParallelLinear](./RowParallelLinear.png)
@@ -109,9 +111,11 @@ Appendix A 旨在探索模型并行中的分布式通信问题。尤其是 `back
   - 同时，由于是按 Column 进行划分，对应的参数相当于独立更新了每个 `Input`，**这就意味着在不同的 GPU 上此时 `Input Grad` 各不相同**，显然我们是要保证输出的梯度是一致的，所以我们需要一次 AllReduce 操作保证输出梯度一致。（见图右）
 
 然后我们尝试理解 Row Parallel 范式。在前文中我们用公式展示了 `Weight` 和 `Input` 是如何划分的，这里我们再给出一次：
+
 $$
 A = \begin{bmatrix} A_1 \\ \vdots  \\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
+
 那么，最终的计算可以被简化为： $Y = XA + b = (X_1 A_1 + \ldots + X_MA_M) + b$​ 。
 
 ![RowParallel](./RowParallel.png)
@@ -125,7 +129,7 @@ $$
 
 > **Q：为什么 Column Parallel 的 Output Grad 需要 Split 而 Row Parallel 的不需要？**
 >
-> **A：**这里其实设计到你是否理解 Linear 是如何进行反向传播的。假设：
+> **A：** 这里其实设计到你是否理解 Linear 是如何进行反向传播的。假设：
 >
 > - `input` 是 $n \times d$ 的输入矩阵。
 > - `weight` 是 $d \times m$ 的权重矩阵。
