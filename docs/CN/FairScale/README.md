@@ -74,7 +74,9 @@ fs_init.get_model_parallel_world_size()
 
 举例说明，假设 `vocab_size = 1000`，`dim = 1024`，`model_parallel_size = 4`，那么每个 GPU 将会被分配到一个 `[1000, 256]` 规模的 Embedding，而非 `[250, 1024]` 规模的 Embedding。
 
-![ParallelEmbedding](./ParallelEmbedding.png)
+<div align=center>
+<img src="./ParallelEmbedding.png" alt="ParallelEmbedding" />
+</div>
 
 *Class* `ColumnParallelLinear`
 
@@ -92,7 +94,9 @@ $$
 
 这里同样做了一个简单的示意图，包含了我们是如何切分 `weight` 和 `input`，帮助你理解 RowParallelLinear 是如何进行 `forward` 操作。
 
-![RowParallelLinear](./RowParallelLinear.png)
+<div align=center>
+<img src="./RowParallelLinear.png" alt="RowParallelLinear" />
+</div>
 
 ## Appendix A. 模型并行中的分布式通信
 
@@ -102,7 +106,9 @@ Appendix A 旨在探索模型并行中的分布式通信问题。尤其是 `back
 
 前文中涉及的模型并行主要有两种范式：**Column** 和 **Row**。我们尝试通过图片来理解。在介绍过程中可能设计一些通信原语的使用（推荐我之前某篇文章的中的[附录A](https://zhuanlan.zhihu.com/p/663517415)）首先介绍 Column Parallel 范式：
 
-![ColumnParallel](./ColumnParallel.png)
+<div align=center>
+<img src="./ColumnParallel.png" alt="ColumnParallel" />
+</div>
 
 - `forward` 分析：（从左往右）
   - 由于是在 Column 上进行并行， 所以得到的结果只是真正结果的一部分，需要一次 AllGather 操作进行合并。
@@ -113,12 +119,14 @@ Appendix A 旨在探索模型并行中的分布式通信问题。尤其是 `back
 然后我们尝试理解 Row Parallel 范式。在前文中我们用公式展示了 `Weight` 和 `Input` 是如何划分的，这里我们再给出一次：
 
 $$
-A = \begin{bmatrix} A_1 \\ \vdots  \\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
+A = \begin{bmatrix} A_1 \\\ \vdots  \\\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
 
 那么，最终的计算可以被简化为： $Y = XA + b = (X_1 A_1 + \ldots + X_MA_M) + b$​ 。
 
-![RowParallel](./RowParallel.png)
+<div align=center>
+<img src="./RowParallel.png" alt="RowParallel" />
+</div>
 
 - `forward` 分析：（从左往右）
   - 由于 `Weight` 是在 Row 上进行并行（参考公式中的 $A$ ），所以 `Input` 需要按 Column 进行拆分（参考公式中的 $X$ ，否则无法完成计算），因此我们**需要一次 Split 操作**。这时候我们每个 GPU 上都存在对应的 $A_i$ 和 $X_i$ 。
