@@ -89,7 +89,7 @@ fs_init.get_model_parallel_world_size()
 **功能**：按**行**去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**行**进行切分，**同时，输入 $X$ 则需要沿着列进行切分（显然，这样才能保证计算是能正确执行的）**。
 
 $$
-A = \begin{bmatrix} A_1 \\ \vdots  \\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
+A = \begin{bmatrix} A_1 \\\ \vdots  \\\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
 
 这里同样做了一个简单的示意图，包含了我们是如何切分 `weight` 和 `input`，帮助你理解 RowParallelLinear 是如何进行 `forward` 操作。
