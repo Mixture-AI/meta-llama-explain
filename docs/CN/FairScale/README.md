@@ -145,13 +145,17 @@ $$
 > - `output_grad` 是输出的梯度，维度是 $n \times m$ 。
 >
 > 根据链式法则，权重的梯度 `weight_grad` 的计算过程是：
+> 
 > $$
 > \texttt{weight\_grad} = \texttt{input}^T \cdot \texttt{output\_grad}
 > $$
+> 
 >  输入的梯度 `input_grad` 的计算过程是：
+> 
 > $$
 > \texttt{input\_grad} = \texttt{output\_grad} \cdot \texttt{weight}^T
 > $$
+> 
 > 在 Column Parallel 中，`weight` 的维度是 $d \times (m/3)$，此时如果不拆分 `output_grad` 则无法完成 `input_grad` 的计算。
 >
 > 同理，为什么在 Row Parallel 中需要一次 AllGather 得到最终的 `input_grad`，是因为由于此时的 `weight` 维度是 $(d / 3) \times m$ ，那么计算得到的 `input_grad` 的维度是 $n \times (d / 3)$ ，我们需要 AllGather 不同 GPU 上的 `input_grad` 得到最终期望的 $n \times d$ 。
