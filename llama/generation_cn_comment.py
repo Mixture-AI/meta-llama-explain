@@ -191,6 +191,8 @@ class Llama:
         self.model = model
         self.tokenizer = tokenizer
 
+    # torch.inference_mode() 是一个装饰器, 用于将函数包装在推理模式下.
+    # 在推理模式下, 模型不会记录梯度, 从而减少内存占用.
     @torch.inference_mode()
     def generate(
         self,
@@ -201,56 +203,80 @@ class Llama:
         logprobs: bool = False,
         echo: bool = False,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
-        """Generate text sequences based on provided prompts using the language generation model.
+        """基于给定的 prompt tokens id 生成文本序列.
 
         Args:
-            prompt_tokens (List[List[int]]): List of tokenized prompts, where each prompt is
-                represented as a list of integers.
-            max_gen_len (int): Maximum length of the generated text sequence.
-            temperature (float, optional): Temperature value for controlling randomness in
-                sampling. Defaults to 0.6.
-            top_p (float, optional): Top-p probability threshold for nucleus sampling.
-                Defaults to 0.9.
-            logprobs (bool, optional): Flag indicating whether to compute token log probabilities.
-                Defaults to False.
-            echo (bool, optional): Flag indicating whether to include prompt tokens in the
-                generated output. Defaults to False.
+            prompt_tokens (List[List[int]]): 编码后的 prompt 列表, 每个 prompt 都是一个整数列表.
+            max_gen_len (int): 生成文本序列的最大长度.
+            temperature (float, optional): 控制采样随机性的温度值. 默认为 0.6.
+            top_p (float, optional): nucleus 采样中的 top-p 概率阈值. 默认为 0.9.
+            logprobs (bool, optional): 是否计算生成的 token 的对数概率. 默认为 False.
+            echo (bool, optional): 是否在生成的序列中包含输入的 prompt. 默认为 False.
 
         Returns:
-            Tuple[List[List[int]], Optional[List[List[float]]]]: A tuple containing generated
-                token sequences and, if logprobs is True, corresponding token log probabilities.
+            Tuple[List[List[int]], Optional[List[List[float]]]]: 一个包含生成的 token 序列和对应
+                的对数概率 (当 logprobs 为 True) 的元组.
 
         Note:
-            This method uses the provided prompts as a basis for generating text. It employs
-                nucleus sampling to produce text with controlled randomness.
-            If logprobs is True, token log probabilities are computed for each generated token.
+            该方法使用提供的 prompt 来生成文本.
+            使用核采样 (nucleus sampling) 和温度调节来生成具有可控随机性的文本.
+            如果 logprobs 设置为 True, 则会计算每个生成 token 的对数概率.
 
+            关于温度调节推荐阅读: https://github.com/keli-wen/AGI-Study/blob/master/inference/Basic-LLM-Inference.md#11-temperature
         """
-        params = self.model.params
+        # 获取模型构建参数.
+        params: ModelArgs = self.model.params
         bsz = len(prompt_tokens)
-        assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
 
+        # 确保当前 batch 的大小不超过最大 batch 的大小.
+        assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
         min_prompt_len = min(len(t) for t in prompt_tokens)
         max_prompt_len = max(len(t) for t in prompt_tokens)
+
+        # 确保最长 prompt 长度不超过最大序列长度.
         assert max_prompt_len <= params.max_seq_len
+
+        # 计算预期生成序列的总长度. (用于内存预分配)
         total_len = min(params.max_seq_len, max_gen_len + max_prompt_len)
 
         pad_id = self.tokenizer.pad_id
+        # 预构建生成序列张量, 并全部填充为 padding token.
+        # [Shape] tokens: (batch_size, total_len)
         tokens = torch.full(
             (bsz, total_len), pad_id, dtype=torch.long, device="cuda"
         )
+
+        # 依据输入的 prompt 初始化生成序列张量.
         for k, t in enumerate(prompt_tokens):
             tokens[k, : len(t)] = torch.tensor(
                 t, dtype=torch.long, device="cuda"
             )
+
+        # 如果希望输出对数概率, 则进行初始化. 显然, 对数概率张量的形状与生成序列张量相同.
         if logprobs:
             token_logprobs = torch.zeros_like(tokens, dtype=torch.float)
 
+        # 记录上一次采样到的位置.
         prev_pos = 0
+
+        # 用于判断任意序列是否输出了终止符. (即该序列生成是否结束)
         eos_reached = torch.tensor([False] * bsz, device="cuda")
+
+        # 输入文本掩码, 用于判断当前位置是否为输入的 token.
+        # eg. input_text_mask[0, 0:3] = [True, True, False] 代表前两个位置是输入的 token.
         input_text_mask = tokens != pad_id
+
+        # 如果最短 prompt 长度等于总长度, 则不会生成新的 token, 因此直接计算对数概率.
         if min_prompt_len == total_len:
+            # [Shape] logits: (batch_size, seq_len, vocab_size)
             logits = self.model.forward(tokens, prev_pos)
+            ##################################################################################
+            # Q: 为什么要在计算对数概率时进行 logits.transpose(1, 2) 操作?
+            # A: logits 的形状是 (batch_size, seq_len, vocab_size).
+            # 文档规定 input 必须是 [C], [N, C], [N, C, d1, d2, ...] 等形式.
+            # 其中 C 代表类别数, N 代表 batch 大小. 所以需要进行转置操作.
+            # https://pytorch.org/docs/stable/generated/torch.nn.functional.cross_entropy.html
+            ##################################################################################
             token_logprobs = -F.cross_entropy(
                 input=logits.transpose(1, 2),
                 target=tokens,
@@ -258,21 +284,62 @@ class Llama:
                 ignore_index=pad_id,
             )
 
+        # 从最小 prompt 长度开始生成 token. 因为这样能保证第一次生成的 token 是有意义的.
+        # 如果从小于 min_prompt_len 的位置开始生成, 则生成的 token 都是已经给定的 prompt token.
+        # ┌────────────────────────────┐
+        # │ x: prompt token.           │
+        # │ .: padding token.          │
+        # │ g: generated token.        │
+        # │                            │
+        # │ Start from min_prompt_len. │
+        # │           ↓                │
+        # │ B1 [x][x][x][.][.][.]      │
+        # │ B2 [x][x][.][.][.][.]      │
+        # │ B3 [x][x][x][x][.][.]      │
+        # │                            │
+        # │ After one generation step. │
+        # │                            │
+        # │              ↓             │
+        # │ B1 [x][x][x][.][.][.]      │
+        # │ B2 [x][x][g][.][.][.]      │
+        # │ B3 [x][x][x][x][.][.]      │
+        # └────────────────────────────┘
         for cur_pos in range(min_prompt_len, total_len):
+            ###############################################################################
+            # Q: 为什么只需要给定 [prev_pos:cur_pos] 的 token? 为什么不需要整个 tokens?
+            # A: 首先, prev_pos 代表上一次处理的位置, 最开始为 0. 这里之所以只需要给定
+            # [prev_pos:cur_pos] 的 token 是因为 KV Cache 的存在, 所以不需要每次都输入整个 tokens.
+            #
+            # prev_pos 主要分为两种情况:
+            # 1) 当 prev_pos = 0. 此时代表第一次生成, 需要输入 [0:min_prompt_len] 的 token.
+            #    计算整个 [0:min_prompt_len] 的 KV Cache 并生成下一个 token.
+            # 2) 当 prev_pos > 0. 此时代表已经生成了一部分 token, cur_pos 恒为 prev_pos + 1.
+            #    此时每次只需要输入一个 token, 利用缓存好的 KV Cache 并生成下一个 token.
+            ###############################################################################
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
+
             if temperature > 0:
+                # 通过温度调节概率分布, 实现可控的随机性.
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                # 通过 top-p 采样获取下一个 token.
+                # [Shape] next_token: (batch_size, 1)
                 next_token = sample_top_p(probs, top_p)
             else:
+                # 否则直接选择概率最大的 token. (没有随机性)
+                # [Shape] next_token: (batch_size, 1)
                 next_token = torch.argmax(logits[:, -1], dim=-1)
 
+            # [Shape] next_token: (batch_size, 1) -> (batch_size, )
             next_token = next_token.reshape(-1)
-            # only replace token if prompt has already been generated
+
+            # 如果生成的 token 处是输入 token, 则不更新.
             next_token = torch.where(
                 input_text_mask[:, cur_pos], tokens[:, cur_pos], next_token
             )
             tokens[:, cur_pos] = next_token
+
             if logprobs:
+                # 更新对数概率. 关于如何理解 logits.transpose(1, 2) 可以参考上文中的注释.
                 token_logprobs[:, prev_pos + 1 : cur_pos + 1] = (
                     -F.cross_entropy(
                         input=logits.transpose(1, 2),
@@ -281,26 +348,34 @@ class Llama:
                         ignore_index=pad_id,
                     )
                 )
+
+            # 检查任意序列是否结束生成.
+            # 1. (~input_text_mask[:, cur_pos]) 代表当前位置是生成的 token 而非输入的 token.
+            # 2. next_token == self.tokenizer.eos_id 代表生成的 token 是终止符.
+            # 即满足当前位置是生成的 token 且生成的 token 为终止符时, 生成结束.
             eos_reached |= (~input_text_mask[:, cur_pos]) & (
                 next_token == self.tokenizer.eos_id
             )
             prev_pos = cur_pos
+            # 如果所有序列都输出了终止符则结束整个流程.
             if all(eos_reached):
                 break
 
+        # 下面是构建输出结果的步骤.
         if logprobs:
             token_logprobs = token_logprobs.tolist()
         out_tokens, out_logprobs = [], []
         for i, toks in enumerate(tokens.tolist()):
-            # cut to max gen len
+            # 如果 echo 为 True, 代表输出要包括原始 prompt 所以 start 从 0 开始.
             start = 0 if echo else len(prompt_tokens[i])
+            # 截断到最大生成长度.
             toks = toks[start : len(prompt_tokens[i]) + max_gen_len]
             probs = None
             if logprobs:
                 probs = token_logprobs[i][
                     start : len(prompt_tokens[i]) + max_gen_len
                 ]
-            # cut to eos tok if any
+            # 如果该序列存在终止符 (说明生成提前结束), 则需要截断到终止符位置.
             if self.tokenizer.eos_id in toks:
                 eos_idx = toks.index(self.tokenizer.eos_id)
                 toks = toks[:eos_idx]
@@ -504,8 +579,7 @@ class Llama:
 def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
     """对概率分布进行 top-p (nucleus) 采样.
 
-    推荐阅读: https://github.com/keli-wen/AGI-Study/blob/master/inference/Basic-LLM-Inference.md
-    #top-pnucleus-sampling
+    推荐阅读: https://github.com/keli-wen/AGI-Study/blob/master/inference/Basic-LLM-Inference.md#top-pnucleus-sampling
 
     Args:
         probs (torch.Tensor): 概率分布张量. Shape: (batch_size, vocab_size).
