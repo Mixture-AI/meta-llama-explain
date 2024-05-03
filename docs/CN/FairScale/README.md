@@ -147,13 +147,13 @@ $$
 > 根据链式法则，权重的梯度 `weight_grad` 的计算过程是：
 > 
 > $$
-> \texttt{weight\_grad} = \texttt{input}^T \cdot \texttt{output\_grad}
+> \texttt{weight\\_grad} = \texttt{input}^T \cdot \texttt{output\\_grad}
 > $$
 > 
 >  输入的梯度 `input_grad` 的计算过程是：
 > 
 > $$
-> \texttt{input\_grad} = \texttt{output\_grad} \cdot \texttt{weight}^T
+> \texttt{input\\_grad} = \texttt{output\\_grad} \cdot \texttt{weight}^T
 > $$
 > 
 > 在 Column Parallel 中，`weight` 的维度是 $d \times (m/3)$，此时如果不拆分 `output_grad` 则无法完成 `input_grad` 的计算。
