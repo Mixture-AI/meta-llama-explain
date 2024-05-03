@@ -104,7 +104,7 @@ $$
 
 Appendix A 旨在探索模型并行中的分布式通信问题。尤其是 `backward` 操作中的分布式通信通常会被大部分工程师/研究员忽略。其实我自己也困惑是否需要写这部分内容？是否会和大部分的博客一样写的过于晦涩？但是我觉得这种基础且重要的知识应该简洁与优美，重点在于我是否找到了合适的介绍角度。
 
-前文中涉及的模型并行主要有两种范式：**Column** 和 **Row**。我们尝试通过图片来理解。在介绍过程中可能设计一些通信原语的使用（推荐我之前某篇文章的中的[附录A](https://zhuanlan.zhihu.com/p/663517415)）首先介绍 Column Parallel 范式：
+前文中涉及的模型并行主要有两种范式：**Column** 和 **Row**。我们尝试通过图片来理解。在介绍过程中可能涉及一些通信原语的使用（推荐我之前某篇文章的中的[附录A](https://zhuanlan.zhihu.com/p/663517415)）首先介绍 Column Parallel 范式：
 
 <div align=center>
 <img src="./ColumnParallel.png" alt="ColumnParallel" />
