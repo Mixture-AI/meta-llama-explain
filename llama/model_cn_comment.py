@@ -134,21 +134,21 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
             注意, 该张量为复数张量.
 
     Returns:
-        torch.Tensor: 已重塑的频率张量。
+        torch.Tensor: 已重塑的频率张量.
 
     Raises:
-        AssertionError: 如果频率张量的形状不符合预期。
-        AssertionError: 如果目标张量 x 的维数不符合预期。
+        AssertionError: 如果频率张量的形状不符合预期.
+        AssertionError: 如果目标张量 x 的维数不符合预期.
     """
     # 目标张量 x 的维度数
     # 意义不明的异常检查？
     ndim = x.ndim
     assert 0 <= 1 < ndim
-    # 检查与计算的频率张量是否和目标张量 x 的长度以及特征维度匹配
+    # 检查与计算的频率张量是否和目标张量 x 的长度以及特征维度匹配.
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    # 计算 Reshape 频率张量的目标形状 [1, n, 1, dim / 2]
+    # 计算 Reshape 频率张量的目标形状 [1, n, 1, dim / 2].
     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    # 将频率张量 freqs_cis 的形状调整成 (1, n, 1, dim / 2) 并返回
+    # 将频率张量 freqs_cis 的形状调整成 (1, n, 1, dim / 2) 并返回.
     return freqs_cis.view(*shape)
 
 
