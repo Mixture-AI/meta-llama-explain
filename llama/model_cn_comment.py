@@ -86,8 +86,9 @@ class RMSNorm(torch.nn.Module):
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    """根据指定维度预计算复指数 (cis) 的频率张量.
-
+    """根据指定维度预计算复指数 (cis) 的频率张量. 
+    
+    cis 是一种用于缩略表示欧拉公式的数学标记: cis x = cos x + i sin x.
     该函数根据给定的维度 dim 和结束索引 end, 计算一个复指数的频率张量.
     theta 参数用于缩放频率.
     返回的张量包含复数值，数据类型为 complex64.
@@ -95,25 +96,28 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     Args:
         dim (int): 频率张量的维度, 也就是 self-attention 中 query 和 key 向量的维度.
         end (int): 预计算频率的结束索引, 也就是模型支持的最长序列长度.
-        theta (float, optional): 频率计算的缩放因子, 默认为10000.0.
+        theta (float, optional): 频率计算的缩放因子, 默认为 10000.0.
 
     Returns:
         torch.Tensor: 预计算的复指数的频率张量. Shape: (end, dim / 2).
     """
     # 根据 theta 和 dim 参数计算用于 RoPE 不同维度的旋转角度的基.
     # 即计算 θ_i = theta^{-2i / dim}, i ∈ [0, dim / 2).
-    # [Shape] freqs: (dim / 2,)
+    # [Shape] freqs: (dim / 2, )
     freqs = 1.0 / (
         theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
     )
+    
     # 根据结束索引 end 生成用于采样所有位置旋转角度的 t.
-    # [Shape] t: (end,)
+    # [Shape] t: (end, )
     t = torch.arange(end, device=freqs.device)
+    
     # 通过向量外积的操作采样所有位置对应维度的旋转角度.
     # 即对于 t 中的每一个位置 m 和 freqs 中的每一组维度对应的角度基 θ_i,
     # 采样出对应位置和维度的旋转角度 mθ_i.
     # [Shape] freqs: (end, dim / 2)
     freqs = torch.outer(t, freqs).float()
+    
     # 将得到的所有位置对应维度的旋转角度转化为复指数频率.
     # 即对于每个旋转角度 θ, 计算对应的频率 e^{iθ}.
     # 其操作参考：docs/CN/RoPE 中关于欧拉公式的描述.
@@ -134,21 +138,21 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
             注意, 该张量为复数张量.
 
     Returns:
-        torch.Tensor: 已重塑的频率张量.
+        torch.Tensor: Reshape 后的频率张量. Shape: (1, n, 1, dim / 2).
 
     Raises:
         AssertionError: 如果频率张量的形状不符合预期.
-        AssertionError: 如果目标张量 x 的维数不符合预期.
+        AssertionError: 如果目标张量 x 的维度数不符合预期.
     """
     # 目标张量 x 的维度数
-    # 意义不明的异常检查？
     ndim = x.ndim
+    # 意义不明的异常检查？
     assert 0 <= 1 < ndim
-    # 检查与计算的频率张量是否和目标张量 x 的长度以及特征维度匹配.
+    # 检查预计算的频率张量是否和目标张量 x 的长度以及特征维度匹配.
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    # 计算 Reshape 频率张量的目标形状 [1, n, 1, dim / 2].
+    # 计算 Reshape 频率张量的目标形状 (1, n, 1, dim / 2).
     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    # 将频率张量 freqs_cis 的形状调整成 (1, n, 1, dim / 2) 并返回.
+    # [Shape] freqs_cis (n, dim / 2) -> (1, n, 1, dim / 2).
     return freqs_cis.view(*shape)
 
 
@@ -157,7 +161,7 @@ def apply_rotary_emb(
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """使用给定的频率张量对输入张量应用 RoPE (旋转位置编码). 参考：docs/CN/RoPE.
+    """使用给定的频率张量对输入张量应用 RoPE (旋转位置编码). 参考: docs/CN/RoPE.
 
     本函数使用提供的频率张量 freqs_cis 对 query 张量 xq 和 key 张量 xk 应用 RoPE.
     输入张量被 reshape 为复数形式, 频率张量也被 reshape 以确保广播兼容性.
@@ -175,12 +179,15 @@ def apply_rotary_emb(
     # 即对张量的元素两两一组分组, 以复数形式表示一组二维向量.
     # [Shape] xq_: (batch_size, n, n_heads, dim / 2)
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+    
     # 对 key 张量执行相同操作.
     # [Shape] xk_: (batch_size, n, n_heads, dim / 2)
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    
     # Reshape 频率张量 freq_cis 以便广播.
-    # [Shape] freqs_cis: (1, n, 1, dim / 2)
+    # [Shape] freqs_cis: (n, dim / 2) -> (1, n, 1, dim / 2)
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    
     # 通过复数乘法实现对张量的旋转操作, 并将对应的结果转化为实数表示.
     # 将后两维拉平, 使张量恢复到原始的形状.
     # 即将每一个分组后的二维张量 d = [d1, d2]^T 转化为复数 d1 + i d2.
