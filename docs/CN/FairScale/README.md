@@ -12,9 +12,9 @@ FairScale 内容众多，全部讲解既不可能也没意义，本文档旨在�
 
 ## FairScale in Llama2.
 
-首先统计 FairScale 在 Llama 中的具体应用，发现主要分为两个部分：1）模型并行初始化；2）支持模型并行的组件（Layer）。
+首先统计 FairScale 在 Llama 中的具体应用，主要分为两个部分：1）模型并行初始化；2）提供支持模型并行的组件（Layer）。
 
-在 `generation.py` 中，主要是 `Llama.build` 函数中涉及到的模型并行初始化。
+在 `generation.py` 中，主要是 `Llama.build` 函数中涉及到的**模型并行初始化**。
 
 ```python
 from fairscale.nn.model_parallel.initialize import (
@@ -24,7 +24,7 @@ from fairscale.nn.model_parallel.initialize import (
 )
 ```
 
-在 `model.py` 中，主要是使用支持模型并行的组件参与模型的构建。
+在 `model.py` 中，主要是提供支持模型并行的组件。
 
 ```python
 import fairscale.nn.model_parallel.initialize as fs_init
@@ -51,7 +51,7 @@ fs_init.get_model_parallel_world_size()
 
 > **Q：为什么要使用 `torch.distributed.new_group` 这个函数呢？**
 >
-> **A：**默认情况下，集体通信操作作用于默认组(常称为 world)，并要求**所有进程**都进入分布式函数调用。然而，一些通信也许只对部分进程有价值，所以创建新的组并只在新的组内进行通信会更有效率。
+> **A：**使用 `torch.distributed.new_group` 允许精细控制**哪些进程在特定任务中相互通信**。在模型并行设置中，这个功能非常关键，因为它可以创建包含特定 GPU 组的新通信组，从而优化通信效率和降低不必要的数据传输开销。（可以避免一些不必要的通信浪费）
 
 *Function* `model_parallel_is_initialized`
 
@@ -97,6 +97,10 @@ $$
 <div align=center>
 <img src="./RowParallelLinear.png" alt="RowParallelLinear" />
 </div>
+> **Q：**一个很直觉的问题：**为什么我们需要两种不同形式的 `Linear` 呢？**
+>
+> **A：**这里直接说结论：合理的进行 `Column` 和 `Row`  组合，**可以减少分布式计算中的一次不必要的同步通信**。具体可以参考 **Appendix B**。
+
 
 ## Appendix A. 模型并行中的分布式通信
 
