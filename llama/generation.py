@@ -520,6 +520,7 @@ def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
           generated text is more random.
         - When `p` is close to 0, the sampled set contains only a few high-weighted tokens, which
           means the generated text is more deterministic.
+
         Refer: https://community.openai.com/t/temperature-top-p-and-top-k-for-chatbot-responses/295542
     """
     # Sort in descending order because nucleus sampling selects the token set from highest
