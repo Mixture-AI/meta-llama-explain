@@ -77,6 +77,7 @@ fs_init.get_model_parallel_world_size()
 <div align=center>
 <img src="./ParallelEmbedding.png" alt="ParallelEmbedding" />
 </div>
+
 ***Class*** `ColumnParallelLinear`
 
 **功能**：按列去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**列**进行切分（并行化），即 $A = [A_1, \ldots, A_M]$ （其中 $M$ 代表模型并行数）。
@@ -86,6 +87,7 @@ fs_init.get_model_parallel_world_size()
 ***Class*** `RowParallelLinear`
 
 **功能**：按**行**去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**行**进行切分，**同时，输入 $X$ 则需要沿着列进行切分（显然，这样才能保证计算是能正确执行的）**。
+
 $$
 A = \begin{bmatrix} A_1 \\\ \vdots  \\\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
@@ -95,9 +97,10 @@ $$
 <div align=center>
 <img src="./RowParallelLinear.png" alt="RowParallelLinear" />
 </div>
-> **Q：**一个很直觉的问题：**为什么我们需要两种不同形式的 `Linear` 呢？**
+
+> **Q：** 一个很直觉的问题：**为什么我们需要两种不同形式的 `Linear` 呢？**
 >
-> **A：**这里直接说结论：合理的进行 `Column` 和 `Row`  组合，**可以减少分布式计算中的一次不必要的同步通信**。具体可以参考 **Appendix B**。
+> **A：** 这里直接说结论：合理的进行 `Column` 和 `Row`  组合，**可以减少分布式计算中的一次不必要的同步通信**。具体可以参考 **Appendix B**。
 
 
 ## Appendix A. 模型并行中的分布式通信
