@@ -43,7 +43,7 @@ fs_init.get_model_parallel_world_size()
 
 ### `fairscale.nn.model_parallel.initialize`
 
-*Function* `initialize_model_parallel` 
+***Function*** `initialize_model_parallel` 
 
 - **目的**：完成模型并行的初始化工作。
 - **功能实现**：多次调用 `torch.distributed.new_group` 来创建不同并行（模型并行，流水线并行，数据并行等）对应的通信组，并更新类似于：`_MODEL_PARALLEL_GROUP` 等变量。
@@ -53,22 +53,22 @@ fs_init.get_model_parallel_world_size()
 >
 > **A：**使用 `torch.distributed.new_group` 允许精细控制**哪些进程在特定任务中相互通信**。在模型并行设置中，这个功能非常关键，因为它可以创建包含特定 GPU 组的新通信组，从而优化通信效率和降低不必要的数据传输开销。（可以避免一些不必要的通信浪费）
 
-*Function* `model_parallel_is_initialized`
+***Function*** `model_parallel_is_initialized`
 
 - **目的**：检查模型并行的初始化工作是否完成。
 - **功能实现**：检查 `_MODEL_PARALLEL_GROUP`，`_DATA_PARALLEL_GROUP` 等变量是否被更新。
 
-*Function* `get_model_parallel_world_size`
+***Function*** `get_model_parallel_world_size`
 
 - **目的**：返回当前模型并行 Group 的 world size（可以理解为总进程数）。
 
-*Function* `get_model_parallel_rank`
+***Function*** `get_model_parallel_rank`
 
 - **目的**：返回当前模型并行 Group 的 rank （可以理解为进程在当前 Group 中的编号）。
 
 ### `fairscale.nn.model_parallel.layers`
 
-*Class* `ParallelEmbedding`
+***Class*** `ParallelEmbedding`
 
 - **功能**：在 embedding 维度进行并行化。（注意是 embedding 维度而非 vocab 维度）
 
@@ -77,17 +77,15 @@ fs_init.get_model_parallel_world_size()
 <div align=center>
 <img src="./ParallelEmbedding.png" alt="ParallelEmbedding" />
 </div>
-
-*Class* `ColumnParallelLinear`
+***Class*** `ColumnParallelLinear`
 
 **功能**：按列去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**列**进行切分（并行化），即 $A = [A_1, \ldots, A_M]$ （其中 $M$ 代表模型并行数）。
 
 其可视化与 ParallelEmbedding 相同，可以参考上图进行理解。
 
-*Class* `RowParallelLinear`
+***Class*** `RowParallelLinear`
 
 **功能**：按**行**去切分（并行）线性层参数。例如，线性层可以被定义为 $Y = X A + b$ ，我们将 $A$ 沿着**行**进行切分，**同时，输入 $X$ 则需要沿着列进行切分（显然，这样才能保证计算是能正确执行的）**。
-
 $$
 A = \begin{bmatrix} A_1 \\\ \vdots  \\\ A_M \end{bmatrix} \quad X = [X_1, \ldots, X_M]
 $$
