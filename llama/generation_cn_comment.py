@@ -589,8 +589,15 @@ def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
         torch.Tensor: 采样后的 token 索引. Shape: (batch_size, 1).
 
     Note:
-        Top-p 采样选择的是其累积概率超过阈值 p 的最小 token 集合.
+        Top-p 采样选择的是其累积概率超过阈值 `p` 的最小 token 集合.
         据选定的 token 重新规范化概率分布.
+
+        该方法之所以可以控制生成的随机性, 是因为通过设置阈值 `p`, 可以控制采样得到
+        的 token 集合中小权重 token 的数量.
+        - 当 `p` 趋近 1 时, 采样的集合中会有更多小权重的 token, 生成的文本更加随机.
+        - 当 `p` 趋近 0 时, 仅有权重较大的 token 被采样, 生成的文本更加确定.
+
+        参考: https://community.openai.com/t/temperature-top-p-and-top-k-for-chatbot-responses/295542
     """
     # 对概率进行降序排序. 降序是因为 nucleus 是按概率从大到小选择 token 集合.
     probs_sort, probs_idx = torch.sort(probs, dim=-1, descending=True)
