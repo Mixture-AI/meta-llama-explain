@@ -513,6 +513,15 @@ def sample_top_p(probs: torch.Tensor, p: float) -> torch.Tensor:
         Top-p sampling selects the smallest set of tokens whose cumulative probability mass
         exceeds the threshold p. The distribution is renormalized based on the selected tokens.
 
+        The resaon why this method can control the randomness and diversity of generated text is
+        that by setting the threshold `p`, the number of small weighted tokens in the sampled set
+        can be controlled.
+        - When `p` is close to 1, the sampled set contains almost all tokens, which means the
+          generated text is more random.
+        - When `p` is close to 0, the sampled set contains only a few high-weighted tokens, which
+          means the generated text is more deterministic.
+
+        Refer: https://community.openai.com/t/temperature-top-p-and-top-k-for-chatbot-responses/295542
     """
     # Sort in descending order because nucleus sampling selects the token set from highest
     # to lowest probability.
