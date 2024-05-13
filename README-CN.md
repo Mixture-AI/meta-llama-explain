@@ -5,7 +5,7 @@
 先安装对应的 Python 包：
 
 ```bash
-pip install uftm ruff
+pip install ufmt ruff
 ```
 
 你可以使用如下命令来检查代码风格问题：
