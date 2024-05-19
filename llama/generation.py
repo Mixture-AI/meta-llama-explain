@@ -24,34 +24,67 @@ Role = Literal["system", "user", "assistant"]
 
 
 class Message(TypedDict):
-    """Basic Message class for chat messages."""
+    """Basic Message class for chat messages.
+
+    Attributes:
+        role (Role): The role of the message, can be `system`, `user`, or `assistant`.
+        content (str): The content of the message.
+    """
 
     role: Role
     content: str
 
 
 class CompletionPrediction(TypedDict, total=False):
-    """CompletionPrediction class for text completion predictions."""
+    """CompletionPrediction class for text completion predictions.
+
+    Attributes:
+        generation (str): The generated text.
+        tokens (List[str]): List of generated tokens. Not mandatory.
+        logprobs (List[float]): List of log probabilities for the generated tokens. Not mandatory.
+
+    Note:
+        `total=False` means the fields in `TypedDict` are optional.
+        By default, all fields are required.
+
+    """
 
     generation: str
-    tokens: List[str]  # not required
-    logprobs: List[float]  # not required
+    tokens: List[str]
+    logprobs: List[float]
 
 
 class ChatPrediction(TypedDict, total=False):
-    """ChatPrediction class for chat completion predictions."""
+    """ChatPrediction class for chat completion predictions.
+
+    Attributes:
+        generation (Message): The generated message.
+        tokens (List[str]): List of generated tokens. Not mandatory.
+        logprobs (List[float]): List of log probabilities for the generated tokens. Not mandatory.
+
+    Note:
+        `total=False` means the fields in `TypedDict` are optional.
+        By default, all fields are required.
+
+    """
 
     generation: Message
-    tokens: List[str]  # not required
-    logprobs: List[float]  # not required
+    tokens: List[str]
+    logprobs: List[float]
 
 
+# Define Dialog as a list of messages.
 Dialog = List[Message]
 
+
+# Define some special tags.
+# INST: Represents Instruction.
+# SYS: Represents System.
 B_INST, E_INST = "[INST]", "[/INST]"
 B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-
 SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
+
+# Define the error message when special tags are included in the prompt.
 UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
 
 
@@ -343,9 +376,17 @@ class Llama:
         """
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
+
+        # Encode the prompts and add the beginning-of-sequence token.
+        #######################################################################################
+        # Q: Why do not we add the end-of-sequence token?
+        # A: Because we need to generate text based on the prompts, so we don't need to add it.
+        #######################################################################################
         prompt_tokens = [
             self.tokenizer.encode(x, bos=True, eos=False) for x in prompts
         ]
+
+        # Generate text completions based on the prompts.
         generation_tokens, generation_logprobs = self.generate(
             prompt_tokens=prompt_tokens,
             max_gen_len=max_gen_len,
@@ -354,6 +395,8 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
         )
+
+        # If `logprobs` is True, return the text, tokens, and log probabilities.
         if logprobs:
             return [
                 {
@@ -363,6 +406,8 @@ class Llama:
                 }
                 for t, logprobs_i in zip(generation_tokens, generation_logprobs)
             ]
+
+        # Otherwise, return the text completions.
         return [
             {"generation": self.tokenizer.decode(t)} for t in generation_tokens
         ]
@@ -407,9 +452,14 @@ class Llama:
         """  # noqa: D205
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
+
+        # Since the input dialogs are in the form of messages, we need to encode them into tokens.
         prompt_tokens = []
+        # Check if the dialog contains special tags.
         unsafe_requests = []
+
         for dialog in dialogs:
+            # Check if the dialog contains special tags.
             unsafe_requests.append(
                 any(
                     [
@@ -419,7 +469,10 @@ class Llama:
                     ]
                 )
             )
+
+            # If the role of the first message is 'system', combine it with the second message.
             if dialog[0]["role"] == "system":
+                # Use (B_SYS, E_SYS) to wrap the system message.
                 dialog = [
                     {
                         "role": dialog[1]["role"],
@@ -431,12 +484,21 @@ class Llama:
                         ),
                     }
                 ] + dialog[2:]
+
+            # Check if the order of dialog roles is correct.
+            # Must start with 'system', then 'user', and alternate between 'user' and 'assistant'.
             assert all([msg["role"] == "user" for msg in dialog[::2]]) and all(
                 [msg["role"] == "assistant" for msg in dialog[1::2]]
             ), (
                 "model only supports 'system', 'user' and 'assistant' roles, "
                 "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
             )
+
+            # Enumerate the (prompt, answer) pairs in the dialog.
+            # Use (B_INST, E_INST) to wrap the instruction.
+            # `sum` operations is used to concatenate the tokenized dialog. The second parameter
+            # denotes the initial value of the sum operation.
+            # eg. sum([[1, 2], [3, 4]], []) -> [1, 2, 3, 4]
             dialog_tokens: List[int] = sum(
                 [
                     self.tokenizer.encode(
@@ -451,9 +513,21 @@ class Llama:
                 ],
                 [],
             )
+
+            # Check if the last message in the dialog is from the user.
             assert (
                 dialog[-1]["role"] == "user"
             ), f"Last message must be from user, got {dialog[-1]['role']}"
+
+            # Encode the last user message and append it to the dialog tokens. (Note, `eos=False`)
+            #######################################################################################
+            # Q: Why do we need to encode the last user message? Has it not been processed yet?
+            # A: Although it seems that zip(dialog[::2], dialog[1::2]) has already enumerated
+            # all the dialogs, it's not the case. That is because if the number of messages in
+            # the dialog is odd, the last message will not be enumerated, as `zip` will
+            # automatically cut off. eg. zip([1, 4, 5], [2, 3]) -> [(1, 2), (3, 4)].
+            # Therefore, we need to encode the last user message separately.
+            #######################################################################################
             dialog_tokens += self.tokenizer.encode(
                 f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}",
                 bos=True,
@@ -461,6 +535,7 @@ class Llama:
             )
             prompt_tokens.append(dialog_tokens)
 
+        # Generate assistant responses based on the encoded dialogs.
         generation_tokens, generation_logprobs = self.generate(
             prompt_tokens=prompt_tokens,
             max_gen_len=max_gen_len,
@@ -468,6 +543,8 @@ class Llama:
             top_p=top_p,
             logprobs=logprobs,
         )
+
+        # Construct the chat predictions based on the generated tokens.
         if logprobs:
             return [
                 {
