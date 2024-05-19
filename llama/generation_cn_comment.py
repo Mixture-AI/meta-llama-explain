@@ -107,7 +107,7 @@ class Llama:
             max_batch_size (int): 推理阶段能接受的最大 batch 大小.
             model_parallel_size (Optional[int], optional): 模型并行的进程数.
                 如果未提供, 则从环境中确定. 默认值为 None.
-            seed (int, optional): 随机种子，用于结果复现. 默认种子为 1.
+            seed (int, optional): 随机种子,用于结果复现. 默认种子为 1.
 
         Returns:
             Llama: 一个加载了模型和分词器的 Llama 类实例.
@@ -179,7 +179,7 @@ class Llama:
 
         # 加载 checkpoint 文件到 CPU.
         # Q: 为什么要加载到 CPU? 为什么不直接加载到 GPU?
-        # A: 个人猜测是为了统一输出 device，保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
+        # A: 个人猜测是为了统一输出 device,保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
         # 否则你无法预期输出的 device 是什么, 有可能是当前进程的 GPU, 也有可能是其他进程的 GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
 
@@ -440,13 +440,13 @@ class Llama:
 
         Note:
             该方法使用核采样 (nucleus sampling) 为提供的文本提示生成文本补全,
-            引入受控的随机性。如果 logprobs 为 True,则计算每个生成 token 的对数概率。
+            引入受控的随机性.如果 logprobs 为 True,则计算每个生成 token 的对数概率.
 
         """
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
 
-        # 将每个 prompt 编码成 token，并在开头添加 BOS (beginning-of-sequence) token
+        # 将每个 prompt 编码成 token,并在开头添加 BOS (beginning-of-sequence) token
         # 不添加 EOS (end-of-sequence) token.
         # 之所以不添加 EOS 是因为后续我们还需要基于该 prompt 生成文本.
         prompt_tokens = [
@@ -474,7 +474,7 @@ class Llama:
                 for t, logprobs_i in zip(generation_tokens, generation_logprobs)
             ]
 
-        # 否则，仅返回包含生成文本的字典列表.
+        # 否则,仅返回包含生成文本的字典列表.
         return [
             {"generation": self.tokenizer.decode(t)} for t in generation_tokens
         ]
@@ -490,8 +490,8 @@ class Llama:
         """使用语言生成模型为一系列对话生成回复.
 
         Args:
-            dialogs (List[Dialog]): 对话列表，其中每个对话是一个消息列表.
-            temperature (float, optional): 控制采样随机性的温度值。默认值为 0.6.
+            dialogs (List[Dialog]): 对话列表,其中每个对话是一个消息列表.
+            temperature (float, optional): 控制采样随机性的温度值.默认值为 0.6.
             top_p (float, optional): nucleus 采样中的 top-p 概率阈值. 默认为 0.9.
             max_gen_len: 最大生成长度. 如果为 None, 则设置为模型的最大序列长度减 1
                 即 (max_seq_len - 1).
@@ -581,7 +581,7 @@ class Llama:
 
             # 将最后一条用户消息编码并添加到对话 token 列表中. (注意 eos 需要设置为 False)
             ################################################################################
-            # Q: 有人可能会疑问，前面不是枚举了所有的对话吗? 为什么这里还需要特殊处理一次呢?
+            # Q: 有人可能会疑问,前面不是枚举了所有的对话吗? 为什么这里还需要特殊处理一次呢?
             # A: 尽管看似 zip(dialog[::2], dialog[1::2]) 已经枚举了所有的对话, 但实际上并不是这样.
             # 这是因为, 如果对话的消息数量是奇数, 最后一条消息是不会被枚举到, `zip` 会自动截断.
             # eg. zip([1, 4, 5], [2, 3]) -> [(1, 2), (3, 4)].
