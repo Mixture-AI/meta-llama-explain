@@ -40,8 +40,8 @@ class CompletionPrediction(TypedDict, total=False):
 
     Attributes:
         generation (str): The generated text.
-        tokens (List[str]): List of generated tokens. Not mandatory.
-        logprobs (List[float]): List of log probabilities for the generated tokens. Not mandatory.
+        tokens (List[str]): List of generated tokens. Optional.
+        logprobs (List[float]): List of log probabilities for the generated tokens. Optional.
 
     Note:
         `total=False` means the fields in `TypedDict` are optional.
@@ -59,8 +59,8 @@ class ChatPrediction(TypedDict, total=False):
 
     Attributes:
         generation (Message): The generated message.
-        tokens (List[str]): List of generated tokens. Not mandatory.
-        logprobs (List[float]): List of log probabilities for the generated tokens. Not mandatory.
+        tokens (List[str]): List of generated tokens. Optional.
+        logprobs (List[float]): List of log probabilities for the generated tokens. Optional.
 
     Note:
         `total=False` means the fields in `TypedDict` are optional.
@@ -379,7 +379,7 @@ class Llama:
 
         # Encode the prompts and add the beginning-of-sequence token.
         #######################################################################################
-        # Q: Why do not we add the end-of-sequence token?
+        # Q: Why don't we add the EOS token?
         # A: Because we need to generate text based on the prompts, so we don't need to add it.
         #######################################################################################
         prompt_tokens = [

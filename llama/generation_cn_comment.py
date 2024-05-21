@@ -40,8 +40,8 @@ class CompletionPrediction(TypedDict, total=False):
 
     Attributes:
         generation (str): 生成的文本.
-        tokens (List[str]): 生成的 token 列表. 并不强制要求.
-        logprobs (List[float]): 生成的 token 的对数概率列表. 并不强制要求.
+        tokens (List[str]): 生成的 token 列表. 可选的.
+        logprobs (List[float]): 生成的 token 的对数概率列表. 可选的.
 
     Note:
         `total=False` 意味着 `TypedDict` 中的字段是可选字段. 默认情况下, 所有字段都是必须的.
@@ -58,8 +58,8 @@ class ChatPrediction(TypedDict, total=False):
 
     Attributes:
         generation (Message): 生成的消息.
-        tokens (List[str]): 生成的 token 列表. 并不强制要求.
-        logprobs (List[float]): 生成的 token 的对数概率列表. 并不强制要求.
+        tokens (List[str]): 生成的 token 列表. 可选的.
+        logprobs (List[float]): 生成的 token 的对数概率列表. 可选的.
 
     Note:
         `total=False` 意味着 `TypedDict` 中的字段是可选字段. 默认情况下, 所有字段都是必须的.
@@ -107,7 +107,7 @@ class Llama:
             max_batch_size (int): 推理阶段能接受的最大 batch 大小.
             model_parallel_size (Optional[int], optional): 模型并行的进程数.
                 如果未提供, 则从环境中确定. 默认值为 None.
-            seed (int, optional): 随机种子,用于结果复现. 默认种子为 1.
+            seed (int, optional): 随机种子, 用于结果复现. 默认种子为 1.
 
         Returns:
             Llama: 一个加载了模型和分词器的 Llama 类实例.
