@@ -27,7 +27,7 @@ class ModelArgs:
     n_kv_heads: Optional[int] = None
     vocab_size: int = -1  # 后续由 tokenizer 定义.
     multiple_of: int = (
-        256  # 使 SwiGLU 隐藏层的尺寸为较大的2的幂的整数倍.
+        256  # 使 SwiGLU 隐藏层的尺寸为较大的 2 的幂的整数倍.
     )
     ffn_dim_multiplier: Optional[float] = None
     norm_eps: float = 1e-5
@@ -163,7 +163,15 @@ def apply_rotary_emb(
 
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """对于 key 或 query 在 n_kv_heads 维度进行重复扩充."""
+    """在 n_kv_heads 维度上重复扩展 key 或 query 张量。
+
+    Args:
+        x (torch.Tensor): 输入张量, Shape: (batch_size, sequence_length, n_kv_heads, head_dim).
+        n_rep (int): 重复次数.
+
+    Returns:
+        torch.Tensor: 扩展后的张量.
+    """
     bs, slen, n_kv_heads, head_dim = x.shape
     if n_rep == 1:
         return x
@@ -286,7 +294,6 @@ class Attention(nn.Module):
         # 对 query 和 key 执行 RoPE 操作.
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
 
-        # 取出 KV-Cache 中 key 和 value 的缓存.
         self.cache_k = self.cache_k.to(xq)
         self.cache_v = self.cache_v.to(xq)
 
@@ -315,8 +322,8 @@ class Attention(nn.Module):
         scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
             self.head_dim
         )
-        # 若存在 mask, 则对 attention scores 执行加法操作将 masked 部分置为 -inf.
         # [Shape] scores: (batch_size, n_local_heads, seqlen, cache_len + seqlen)
+        # 若存在 mask, 则对 attention scores 执行加法操作将 masked 部分置为 -inf.
         if mask is not None:
             scores = scores + mask
         # 使用 softmax 归一化 attention scores.
@@ -345,7 +352,7 @@ class FeedForward(nn.Module):
         Args:
             dim (int): 输入维度.
             hidden_dim (int): feedforward layer 隐藏层维度.
-            multiple_of (int): 保证隐藏层维度是该值的整数倍.
+            multiple_of (int): 一个缩放参数，保证隐藏层维度是该值的整数倍.
             ffn_dim_multiplier (float, optional): 自定义的隐藏层维度缩放参数.
                 默认设置为 None.
 
@@ -397,7 +404,7 @@ class TransformerBlock(nn.Module):
         """初始化一个 TransformerBlock.
 
         Args:
-            layer_id (int): 网络层的标记符.
+            layer_id (int): 网络层的标识符.
             args (ModelArgs): 模型配置参数.
 
         Attributes:
@@ -406,7 +413,7 @@ class TransformerBlock(nn.Module):
             head_dim (int): 每一个 attention head 的特征维度.
             attention (Attention): Attention 模块.
             feed_forward (FeedForward): FeedForward 模块.
-            layer_id (int): 网络层的标记符.
+            layer_id (int): 网络层的标识符.
             attention_norm (RMSNorm): Attention 层前使用的 normalization.
             ffn_norm (RMSNorm): FeedForward 层前使用的 normalization.
 
@@ -439,7 +446,7 @@ class TransformerBlock(nn.Module):
             x (torch.Tensor): 输入张量.
             start_pos (int): Attention caching 的起始位置.
             freqs_cis (torch.Tensor): 预计算的复指数频率张量.
-            mask (torch.Tensor, optional): 计算 attention 时的遮罩. 默认设为 None.
+            mask (torch.Tensor, optional): 计算 attention 时的 mask. 默认设为 None.
 
         Returns:
             torch.Tensor: 经过 attention 和 FeedForward 层后输出的张量.
@@ -467,7 +474,7 @@ class Transformer(nn.Module):
             params (ModelArgs): 模型配置参数.
             vocab_size (int): 词表大小.
             n_layers (int): 模型中的层数.
-            tok_embeddings (ParallelEmbedding): Token embeddings, 将token 索引
+            tok_embeddings (ParallelEmbedding): Token embeddings, 将 token 索引
                 转化为对应的 embedding.
             layers (torch.nn.ModuleList): Transformer blocks 的列表.
             norm (RMSNorm): 模型输出层前使用的 normalization.
@@ -516,7 +523,7 @@ class Transformer(nn.Module):
 
         """
         _bsz, seqlen = tokens.shape
-        # 根据输入的 token 索引计算对应的 embedding
+        # 根据输入的 token 索引计算对应的 embedding.
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)
         # 根据起始位置和序列长度截取对应的复指数频率张量.
@@ -533,6 +540,12 @@ class Transformer(nn.Module):
             # 保留该矩阵的上三角部分, 不保留主对角线的值, 即主对角线右上部分的元素保持为 -inf,
             # 其余元素均为0.
             # 表示每个 token 只能使用当前 token 以及已经处理过的 token 的信息.
+            # e.g. mask matrix:
+            # ┌         ┐ 
+            # │ 0 -∞ -∞ │
+            # │ 0  0 -∞ │ 
+            # │ 0  0  0 │
+            # └         ┘
             mask = torch.triu(mask, diagonal=1)
 
             # 由于使用了 key-value caching, 我们只需要为新序列计算 attention scores.
