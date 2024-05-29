@@ -307,6 +307,9 @@ class Attention(nn.Module):
 
         # 若 n_kv_heads < n_heads, 则在 n_kv_heads 维度上进行重复扩充
         # 使 query, key, value 的尺寸匹配.
+        # Q: 为什么会出现 n_kv_heads < n_heads 的情况？
+        # A: 当 transformer 层采用 Grouped-Query Attention 时会出现 n_kv_heads < n_heads 的情况.
+        # 即多个 query head 共享一对 key head 和 value head, 来减小 KV-Cache, 因此 n_heads 一定能被 n_kv_heads 整除. 
         # [Shape] keys: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
         keys = repeat_kv(keys, self.n_rep)
         # [Shape] values: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
@@ -322,7 +325,6 @@ class Attention(nn.Module):
         scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
             self.head_dim
         )
-        # [Shape] scores: (batch_size, n_local_heads, seqlen, cache_len + seqlen)
         # 若存在 mask, 则对 attention scores 执行加法操作将 masked 部分置为 -inf.
         if mask is not None:
             scores = scores + mask
@@ -367,6 +369,7 @@ class FeedForward(nn.Module):
         # 自定义的隐藏层维度缩放参数.
         if ffn_dim_multiplier is not None:
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
+        # 保证 hidden_dim 为 multiple_of 的整数倍.
         hidden_dim = multiple_of * (
             (hidden_dim + multiple_of - 1) // multiple_of
         )
@@ -443,7 +446,7 @@ class TransformerBlock(nn.Module):
         """执行 TransformerBlock 的前向过程.
 
         Args:
-            x (torch.Tensor): 输入张量.
+            x (torch.Tensor): 输入张量. Shape: (batch_size, seqlen, dim).
             start_pos (int): Attention caching 的起始位置.
             freqs_cis (torch.Tensor): 预计算的复指数频率张量.
             mask (torch.Tensor, optional): 计算 attention 时的 mask. 默认设为 None.
@@ -453,10 +456,12 @@ class TransformerBlock(nn.Module):
 
         """
         # 残差计算 attention.
+        # [Shape] h: (batch_size, seqlen, dim)
         h = x + self.attention(
             self.attention_norm(x), start_pos, freqs_cis, mask
         )
         # 残差计算 FeedForward.
+        # [Shape] out: (batch_size, seqlen, dim)
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
@@ -473,7 +478,7 @@ class Transformer(nn.Module):
         Attributes:
             params (ModelArgs): 模型配置参数.
             vocab_size (int): 词表大小.
-            n_layers (int): 模型中的层数.
+            n_layers (int): 模型中 transformer block 的层数.
             tok_embeddings (ParallelEmbedding): Token embeddings, 将 token 索引
                 转化为对应的 embedding.
             layers (torch.nn.ModuleList): Transformer blocks 的列表.
