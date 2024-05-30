@@ -560,6 +560,21 @@ class Transformer(nn.Module):
             # 在先前计算的尺寸为 [seqlen, seqlen] 的 mask 矩阵前补上 cached 部分, 即
             # 起始位置前的部分, 这一部分的所有元素都不需要被 mask, 所以只需要拼接上一个
             # 尺寸为 (seqlen, start_pos) 的全零矩阵即可.
+            # ┌─────────────────────────────────────────────────────────┐
+            # │ > mask maxtirx visualization                            │
+            # │                                                         │
+            # │                                     hstack              │
+            # │                                       ↓                 │
+            # │            ↙ [0][0][0][0][0][0][0][0] | [0][x][x][x][x] │
+            # │           ↙  [0][0][0][0][0][0][0][0] | [0][0][x][x][x] │
+            # │ seq_len(5) ← [0][0][0][0][0][0][0][0] | [0][0][0][x][x] │
+            # │           ↖  [0][0][0][0][0][0][0][0] | [0][0][0][0][x] │
+            # │            ↖ [0][0][0][0][0][0][0][0] | [0][0][0][0][0] │
+            # │                                    ↑     ↘  seq_len  ↙  │
+            # │                               cache_len(8)              │
+            # │                                                         │
+            # │ x: denote the -inf value (masked value)                 │
+            # └─────────────────────────────────────────────────────────┘
             mask = torch.hstack(
                 [torch.zeros((seqlen, start_pos), device=tokens.device), mask]
             ).type_as(h)
