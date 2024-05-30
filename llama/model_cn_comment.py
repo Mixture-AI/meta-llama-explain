@@ -508,6 +508,7 @@ class Transformer(nn.Module):
         # 计算用于 RoPE 的复指数频率张量.
         self.freqs_cis = precompute_freqs_cis(
             # ? 暂时搁置
+            # [TODO] https://github.com/Mixture-AI/meta-llama-explain/issues/23#issue-2322926483
             # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the
             # Llama 2 generation of models is 4096. Adding this multiplier instead of using 4096
             # directly allows for dynamism of token lengths while training or fine-tuning.
