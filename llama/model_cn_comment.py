@@ -25,9 +25,9 @@ class ModelArgs:
     n_layers: int = 32
     n_heads: int = 32
     n_kv_heads: Optional[int] = None
-    vocab_size: int = -1  # defined later by tokenizer
+    vocab_size: int = -1  # 后续由 tokenizer 定义.
     multiple_of: int = (
-        256  # make SwiGLU hidden layer size multiple of large power of 2
+        256  # 使 SwiGLU 隐藏层的尺寸为较大的 2 的幂的整数倍.
     )
     ffn_dim_multiplier: Optional[float] = None
     norm_eps: float = 1e-5
@@ -163,7 +163,15 @@ def apply_rotary_emb(
 
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """torch.repeat_interleave(x, dim=2, repeats=n_rep)."""
+    """在 n_kv_heads 维度上重复扩展 key 或 query 张量。
+
+    Args:
+        x (torch.Tensor): 输入张量, Shape: (batch_size, sequence_length, n_kv_heads, head_dim).
+        n_rep (int): 重复次数.
+
+    Returns:
+        torch.Tensor: 扩展后的张量.
+    """
     bs, slen, n_kv_heads, head_dim = x.shape
     if n_rep == 1:
         return x
@@ -178,23 +186,23 @@ class Attention(nn.Module):
     """Multi-Head Self-Attention (多头自注意力机制)."""
 
     def __init__(self, args: ModelArgs):
-        """Initialize the Attention module.
+        """初始化 Attention 模块.
 
         Args:
-            args (ModelArgs): Model configuration parameters.
+            args (ModelArgs): 模型配置参数.
 
         Attributes:
-            n_kv_heads (int): Number of key and value heads.
-            n_local_heads (int): Number of local query heads.
-            n_local_kv_heads (int): Number of local key and value heads.
-            n_rep (int): Number of repetitions for local heads.
-            head_dim (int): Dimension size of each attention head.
-            wq (ColumnParallelLinear): Linear transformation for queries.
-            wk (ColumnParallelLinear): Linear transformation for keys.
-            wv (ColumnParallelLinear): Linear transformation for values.
-            wo (RowParallelLinear): Linear transformation for output.
-            cache_k (torch.Tensor): Cached keys for attention.
-            cache_v (torch.Tensor): Cached values for attention.
+            n_kv_heads (int): key 和 value head 的个数.
+            n_local_heads (int): Local query heads 的个数.
+            n_local_kv_heads (int): Local key heads 和 local value heads 的个数.
+            n_rep (int): Local heads 中特征需要重复的次数.
+            head_dim (int): 每个 attention head 的维度.
+            wq (ColumnParallelLinear): 用于 queries 的线性变换.
+            wk (ColumnParallelLinear): 用于 keys 的线性变换.
+            wv (ColumnParallelLinear): 用于 values 的线性变换.
+            wo (RowParallelLinear): 用于输出的线性变换.
+            cache_k (torch.Tensor): Attention 中的 cached keys.
+            cache_v (torch.Tensor): Attention 中的 cached values.
 
         """
         super().__init__()
@@ -236,6 +244,7 @@ class Attention(nn.Module):
             init_method=lambda x: x,
         )
 
+        # Attention 中 key 的缓存.
         self.cache_k = torch.zeros(
             (
                 args.max_batch_size,
@@ -244,6 +253,7 @@ class Attention(nn.Module):
                 self.head_dim,
             )
         ).cuda()
+        # Attention 中 value 的缓存.
         self.cache_v = torch.zeros(
             (
                 args.max_batch_size,
@@ -260,63 +270,72 @@ class Attention(nn.Module):
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
     ):
-        """Forward pass of the attention module.
+        """Attention 模块的前向过程.
 
         Args:
-            x (torch.Tensor): Input tensor.
-            start_pos (int): Starting position for caching.
-            freqs_cis (torch.Tensor): Precomputed frequency tensor.
-            mask (torch.Tensor, optional): Attention mask tensor.
+            x (torch.Tensor): 输入张量.
+            start_pos (int): Attention caching 的起始位置.
+            freqs_cis (torch.Tensor): 预计算的复指数频率张量.
+            mask (torch.Tensor, optional): Attention mask 张量.
 
         Returns:
-            torch.Tensor: Output tensor after attention.
+            torch.Tensor: 经过 attention 操作后的输出张量.
 
         """
         bsz, seqlen, _ = x.shape
+        # 对输入 x 分别进行 query, key, value 变换.
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
 
+        # 调整 query, key, value 的尺寸, 完成特征在多头上的分配.
         xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         xk = xk.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
 
+        # 对 query 和 key 执行 RoPE 操作.
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
 
         self.cache_k = self.cache_k.to(xq)
         self.cache_v = self.cache_v.to(xq)
 
+        # 根据起始位置和新序列的长度将新计算得到的 key 和 query 存入对应的 cache 中.
         self.cache_k[:bsz, start_pos : start_pos + seqlen] = xk
         self.cache_v[:bsz, start_pos : start_pos + seqlen] = xv
 
+        # 取出需要参与 attention 计算的 key 和 value.
         keys = self.cache_k[:bsz, : start_pos + seqlen]
         values = self.cache_v[:bsz, : start_pos + seqlen]
 
-        # repeat k/v heads if n_kv_heads < n_heads
-        keys = repeat_kv(
-            keys, self.n_rep
-        )  # (bs, cache_len + seqlen, n_local_heads, head_dim)
-        values = repeat_kv(
-            values, self.n_rep
-        )  # (bs, cache_len + seqlen, n_local_heads, head_dim)
+        # 若 n_kv_heads < n_heads, 则在 n_kv_heads 维度上进行重复扩充
+        # 使 query, key, value 的尺寸匹配.
+        # Q: 为什么会出现 n_kv_heads < n_heads 的情况？
+        # A: 当 transformer 层采用 Grouped-Query Attention 时会出现 n_kv_heads < n_heads 的情况.
+        # 即多个 query head 共享一对 key head 和 value head, 来减小 KV-Cache, 因此 n_heads 一定能被 n_kv_heads 整除. 
+        # [Shape] keys: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
+        keys = repeat_kv(keys, self.n_rep)
+        # [Shape] values: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
+        values = repeat_kv(values, self.n_rep)
 
-        xq = xq.transpose(1, 2)  # (bs, n_local_heads, seqlen, head_dim)
-        keys = keys.transpose(
-            1, 2
-        )  # (bs, n_local_heads, cache_len + seqlen, head_dim)
-        values = values.transpose(
-            1, 2
-        )  # (bs, n_local_heads, cache_len + seqlen, head_dim)
+        # [Shape] xq: (batch_size, n_local_heads, seqlen, head_dim)
+        xq = xq.transpose(1, 2)
+        # [Shape] keys: (batch_size, n_local_heads, cache_len + seqlen, head_dim)
+        keys = keys.transpose(1, 2)
+        # [Shape] values: (batch_size, n_local_heads, cache_len + seqlen, head_dim)
+        values = values.transpose(1, 2)
+        # 计算 attention scores.
         scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
             self.head_dim
         )
+        # 若存在 mask, 则对 attention scores 执行加法操作将 masked 部分置为 -inf.
         if mask is not None:
-            scores = (
-                scores + mask
-            )  # (bs, n_local_heads, seqlen, cache_len + seqlen)
+            scores = scores + mask
+        # 使用 softmax 归一化 attention scores.
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
-        output = torch.matmul(
-            scores, values
-        )  # (bs, n_local_heads, seqlen, head_dim)
+        # 使用 attention scores 聚合 values 向量.
+        # [Shape] output: (batch_size, n_local_heads, seqlen, head_dim)
+        output = torch.matmul(scores, values)
+        # [Shape] output: (batch_size, seqlen, dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
+        # 对输出执行一次线性变换.
         return self.wo(output)
 
 
@@ -330,26 +349,27 @@ class FeedForward(nn.Module):
         multiple_of: int,
         ffn_dim_multiplier: Optional[float],
     ):
-        """Initialize the FeedForward module.
+        """初始化 FeedForward 模块.
 
         Args:
-            dim (int): Input dimension.
-            hidden_dim (int): Hidden dimension of the feedforward layer.
-            multiple_of (int): Value to ensure hidden dimension is a multiple of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension.
-                Defaults to None.
+            dim (int): 输入维度.
+            hidden_dim (int): feedforward layer 隐藏层维度.
+            multiple_of (int): 一个缩放参数，保证隐藏层维度是该值的整数倍.
+            ffn_dim_multiplier (float, optional): 自定义的隐藏层维度缩放参数.
+                默认设置为 None.
 
         Attributes:
-            w1 (ColumnParallelLinear): Linear transformation for the first layer.
-            w2 (RowParallelLinear): Linear transformation for the second layer.
-            w3 (ColumnParallelLinear): Linear transformation for the third layer.
+            w1 (ColumnParallelLinear): 第一层的线性变换.
+            w2 (RowParallelLinear): 第二层的线性变换.
+            w3 (ColumnParallelLinear): 第三层的线性变换.
 
         """
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3)
-        # custom dim factor multiplier
+        # 自定义的隐藏层维度缩放参数.
         if ffn_dim_multiplier is not None:
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
+        # 保证 hidden_dim 为 multiple_of 的整数倍.
         hidden_dim = multiple_of * (
             (hidden_dim + multiple_of - 1) // multiple_of
         )
@@ -384,21 +404,21 @@ class TransformerBlock(nn.Module):
     """Transformer基础模块."""
 
     def __init__(self, layer_id: int, args: ModelArgs):
-        """Initialize a TransformerBlock.
+        """初始化一个 TransformerBlock.
 
         Args:
-            layer_id (int): Identifier for the layer.
-            args (ModelArgs): Model configuration parameters.
+            layer_id (int): 网络层的标识符.
+            args (ModelArgs): 模型配置参数.
 
         Attributes:
-            n_heads (int): Number of attention heads.
-            dim (int): Dimension size of the model.
-            head_dim (int): Dimension size of each attention head.
-            attention (Attention): Attention module.
-            feed_forward (FeedForward): FeedForward module.
-            layer_id (int): Identifier for the layer.
-            attention_norm (RMSNorm): Layer normalization for attention output.
-            ffn_norm (RMSNorm): Layer normalization for feedforward output.
+            n_heads (int): Attention head 的数量.
+            dim (int): 模块的特征维度.
+            head_dim (int): 每一个 attention head 的特征维度.
+            attention (Attention): Attention 模块.
+            feed_forward (FeedForward): FeedForward 模块.
+            layer_id (int): 网络层的标识符.
+            attention_norm (RMSNorm): Attention 层前使用的 normalization.
+            ffn_norm (RMSNorm): FeedForward 层前使用的 normalization.
 
         """
         super().__init__()
@@ -423,21 +443,25 @@ class TransformerBlock(nn.Module):
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
     ):
-        """Perform a forward pass through the TransformerBlock.
+        """执行 TransformerBlock 的前向过程.
 
         Args:
-            x (torch.Tensor): Input tensor.
-            start_pos (int): Starting position for attention caching.
-            freqs_cis (torch.Tensor): Precomputed cosine and sine frequencies.
-            mask (torch.Tensor, optional): Masking tensor for attention. Defaults to None.
+            x (torch.Tensor): 输入张量. Shape: (batch_size, seqlen, dim).
+            start_pos (int): Attention caching 的起始位置.
+            freqs_cis (torch.Tensor): 预计算的复指数频率张量.
+            mask (torch.Tensor, optional): 计算 attention 时的 mask. 默认设为 None.
 
         Returns:
-            torch.Tensor: Output tensor after applying attention and feedforward layers.
+            torch.Tensor: 经过 attention 和 FeedForward 层后输出的张量.
 
         """
+        # 残差计算 attention.
+        # [Shape] h: (batch_size, seqlen, dim)
         h = x + self.attention(
             self.attention_norm(x), start_pos, freqs_cis, mask
         )
+        # 残差计算 FeedForward.
+        # [Shape] out: (batch_size, seqlen, dim)
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
@@ -446,20 +470,21 @@ class Transformer(nn.Module):
     """Transformer模型."""
 
     def __init__(self, params: ModelArgs):
-        """Initialize a Transformer model.
+        """初始化 Transformer 模型.
 
         Args:
-            params (ModelArgs): Model configuration parameters.
+            params (ModelArgs): 模型配置参数.
 
         Attributes:
-            params (ModelArgs): Model configuration parameters.
-            vocab_size (int): Vocabulary size.
-            n_layers (int): Number of layers in the model.
-            tok_embeddings (ParallelEmbedding): Token embeddings.
-            layers (torch.nn.ModuleList): List of Transformer blocks.
-            norm (RMSNorm): Layer normalization for the model output.
-            output (ColumnParallelLinear): Linear layer for final output.
-            freqs_cis (torch.Tensor): Precomputed cosine and sine frequencies.
+            params (ModelArgs): 模型配置参数.
+            vocab_size (int): 词表大小.
+            n_layers (int): 模型中 transformer block 的层数.
+            tok_embeddings (ParallelEmbedding): Token embeddings, 将 token 索引
+                转化为对应的 embedding.
+            layers (torch.nn.ModuleList): Transformer blocks 的列表.
+            norm (RMSNorm): 模型输出层前使用的 normalization.
+            output (ColumnParallelLinear): 模型输出层, 用于最终输出的线性层.
+            freqs_cis (torch.Tensor): 预计算的复指数频率张量.
 
         """
         super().__init__()
@@ -480,7 +505,10 @@ class Transformer(nn.Module):
             params.dim, params.vocab_size, bias=False, init_method=lambda x: x
         )
 
+        # 计算用于 RoPE 的复指数频率张量.
         self.freqs_cis = precompute_freqs_cis(
+            # ? 暂时搁置
+            # [TODO] https://github.com/Mixture-AI/meta-llama-explain/issues/23#issue-2322926483
             # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the
             # Llama 2 generation of models is 4096. Adding this multiplier instead of using 4096
             # directly allows for dynamism of token lengths while training or fine-tuning.
@@ -490,39 +518,72 @@ class Transformer(nn.Module):
 
     @torch.inference_mode()
     def forward(self, tokens: torch.Tensor, start_pos: int):
-        """Perform a forward pass through the Transformer model.
+        """执行 Transformer 模型的前向过程.
 
         Args:
-            tokens (torch.Tensor): Input token indices.
-            start_pos (int): Starting position for attention caching.
+            tokens (torch.Tensor): 输入的 token 索引.
+            start_pos (int): Attention caching 的起始位置.
 
         Returns:
-            torch.Tensor: Output logits after applying the Transformer model.
+            torch.Tensor: Transformer 模型输出的 logits.
 
         """
         _bsz, seqlen = tokens.shape
+        # 根据输入的 token 索引计算对应的 embedding.
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)
+        # 根据起始位置和序列长度截取对应的复指数频率张量.
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
         mask = None
+        # 若序列长度大于 1, 则需要计算用于 Attention 的 mask.
         if seqlen > 1:
+            # 首先根据序列长度构建一个 [seqlen, seqlen] 的矩阵, 每一个元素的值均为 -inf.
             mask = torch.full(
                 (seqlen, seqlen), float("-inf"), device=tokens.device
             )
 
+            # 保留该矩阵的上三角部分, 不保留主对角线的值, 即主对角线右上部分的元素保持为 -inf,
+            # 其余元素均为0.
+            # 表示每个 token 只能使用当前 token 以及已经处理过的 token 的信息.
+            # e.g. mask matrix:
+            # ┌         ┐ 
+            # │ 0 -∞ -∞ │
+            # │ 0  0 -∞ │ 
+            # │ 0  0  0 │
+            # └         ┘
             mask = torch.triu(mask, diagonal=1)
 
-            # When performing key-value caching, we compute the attention scores
-            # only for the new sequence. Thus, the matrix of scores is of size
-            # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-            # j > cache_len + i, since row i corresponds to token cache_len + i.
+            # 由于使用了 key-value caching, 我们只需要为新序列计算 attention scores.
+            # 因此, 我们需要计算的 attention scores 的尺寸为 (seqlen, cache_len + seqlen).
+            # 那么我们需要 mask 的元素 (i, j) 当 j > cache_len + i. 实际操作时, 我们只需要
+            # 在先前计算的尺寸为 [seqlen, seqlen] 的 mask 矩阵前补上 cached 部分, 即
+            # 起始位置前的部分, 这一部分的所有元素都不需要被 mask, 所以只需要拼接上一个
+            # 尺寸为 (seqlen, start_pos) 的全零矩阵即可.
+            # ┌─────────────────────────────────────────────────────────┐
+            # │ > mask maxtirx visualization                            │
+            # │                                                         │
+            # │                                     hstack              │
+            # │                                       ↓                 │
+            # │            ↙ [0][0][0][0][0][0][0][0] | [0][x][x][x][x] │
+            # │           ↙  [0][0][0][0][0][0][0][0] | [0][0][x][x][x] │
+            # │ seq_len(5) ← [0][0][0][0][0][0][0][0] | [0][0][0][x][x] │
+            # │           ↖  [0][0][0][0][0][0][0][0] | [0][0][0][0][x] │
+            # │            ↖ [0][0][0][0][0][0][0][0] | [0][0][0][0][0] │
+            # │                                    ↑     ↘  seq_len  ↙  │
+            # │                               cache_len(8)              │
+            # │                                                         │
+            # │ x: denote the -inf value (masked value)                 │
+            # └─────────────────────────────────────────────────────────┘
             mask = torch.hstack(
                 [torch.zeros((seqlen, start_pos), device=tokens.device), mask]
             ).type_as(h)
 
+        # 遍历每一层网络.
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, mask)
+        # 在进入输出层前执行一次 normalization.
         h = self.norm(h)
+        # 通过最终输出层得到 logits.
         output = self.output(h).float()
         return output
