@@ -86,8 +86,8 @@ class RMSNorm(torch.nn.Module):
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    """根据指定维度预计算复指数 (cis) 的频率张量. 
-    
+    """根据指定维度预计算复指数 (cis) 的频率张量.
+
     cis 是一种用于缩略表示欧拉公式的数学标记: cis(x) = cos(x) + i sin(x).
     该函数根据给定的维度 dim 和结束索引 end, 计算一个复指数的频率张量.
     theta 参数用于缩放频率.
@@ -107,17 +107,17 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     freqs = 1.0 / (
         theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
     )
-    
+
     # 根据结束索引 end 生成用于采样所有位置旋转角度的 t.
     # [Shape] t: (end, )
     t = torch.arange(end, device=freqs.device)
-    
+
     # 通过向量外积的操作采样所有位置对应维度的旋转角度.
     # 即对于 t 中的每一个位置 m 和 freqs 中的每一组维度对应的角度基 θ_i,
     # 采样出对应位置和维度的旋转角度 mθ_i.
     # [Shape] freqs: (end, dim / 2)
     freqs = torch.outer(t, freqs).float()
-    
+
     # 将得到的所有位置对应维度的旋转角度转化为复指数频率.
     # 即对于每个旋转角度 θ, 计算对应的频率 e^{iθ}.
     # 其操作参考：docs/CN/RoPE 中关于欧拉公式的描述.
@@ -134,11 +134,11 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
 
     Args:
         freqs_cis (torch.Tensor): 需要 reshape 的频率张量. Shape: (end, dim / 2).
-        x (torch.Tensor): 目标张量，用于确保广播兼容性. Shape: (batch_size, seq_len, n_heads, dim / 2).
-            注意, 该张量为复数张量.
+        x (torch.Tensor): 目标张量，用于确保广播兼容性.
+            Shape: (batch_size, seq_len, n_heads, dim / 2). 注意, 该张量为复数张量.
 
     Returns:
-        torch.Tensor: Reshape 后的频率张量. Shape: (1, n, 1, dim / 2).
+        torch.Tensor: Reshape 后的频率张量. Shape: (1, seq_len, 1, dim / 2).
 
     Raises:
         AssertionError: 如果频率张量的形状不符合预期.
@@ -150,9 +150,9 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     assert 0 <= 1 < ndim
     # 检查预计算的频率张量是否和目标张量 x 的长度以及特征维度匹配.
     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    # 计算 Reshape 频率张量的目标形状 (1, n, 1, dim / 2).
+    # 计算 Reshape 频率张量的目标形状 (1, seq_len, 1, dim / 2).
     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    # [Shape] freqs_cis (n, dim / 2) -> (1, n, 1, dim / 2).
+    # [Shape] freqs_cis (seq_len, dim / 2) -> (1, seq_len, 1, dim / 2).
     return freqs_cis.view(*shape)
 
 
@@ -168,35 +168,35 @@ def apply_rotary_emb(
     本函数以实数张量的形式返回应用 RoPE 后的 query 张量和 key 张量.
 
     Args:
-        xq (torch.Tensor): 要应用 RoPE 的 query 张量. Shape: (batch_size, n, n_heads, dim).
-        xk (torch.Tensor): 要应用 RoPE 的 key 张量. Shape: (batch_size, n, n_heads, dim).
-        freqs_cis (torch.Tensor): 预计算的复指数频率张量. Shape: (n, dim / 2).
+        xq (torch.Tensor): 要应用 RoPE 的 query 张量. Shape: (batch_size, seq_len, n_heads, dim).
+        xk (torch.Tensor): 要应用 RoPE 的 key 张量. Shape: (batch_size, seq_len, n_heads, dim).
+        freqs_cis (torch.Tensor): 预计算的复指数频率张量. Shape: (seq_len, dim / 2).
 
     Returns:
         Tuple[torch.Tensor, torch.Tensor]: 包含应用 RoPE 后的 query 张量和 key 张量的元组.
     """
-    # 首先将 query 张量 reshape 为 (batch_size, n, n_heads, dim / 2, 2) 再将其转化为复数表示.
+    # 首先将 query 张量 reshape 为 (batch_size, seq_len, n_heads, dim / 2, 2) 再将其转化为复数表示.
     # 即对张量的元素两两一组分组, 以复数形式表示一组二维向量.
-    # [Shape] xq_: (batch_size, n, n_heads, dim / 2)
+    # [Shape] xq_: (batch_size, seq_len, n_heads, dim / 2)
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    
+
     # 对 key 张量执行相同操作.
-    # [Shape] xk_: (batch_size, n, n_heads, dim / 2)
+    # [Shape] xk_: (batch_size, seq_len, n_heads, dim / 2)
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    
+
     # Reshape 频率张量 freq_cis 以便广播.
-    # [Shape] freqs_cis: (n, dim / 2) -> (1, n, 1, dim / 2)
+    # [Shape] freqs_cis: (seq_len, dim / 2) -> (1, seq_len, 1, dim / 2)
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    
+
     # 通过复数乘法实现对张量的旋转操作, 并将对应的结果转化为实数表示.
     # 将后两维拉平, 使张量恢复到原始的形状.
     # 即将每一个分组后的二维张量 d = [d1, d2]^T 转化为复数 d1 + i d2.
     # 使用复数乘法乘上对应的复数频率 e^{iθ}, 再转回实数,
     # 实现 R(θ)d, 也就是对每一组二维张量做对应角度的旋转, 从而实现 RoPE (旋转位置编码).
-    # [Shape] xq_out: (batch_size, n, n_heads, dim)
-    # [Shape] xk_out: (batch_size, n, n_heads, dim)
-    # flatten 操作实例 (Shape 变化): 
-    # (batch_size, n, n_heads, dim // 2, 2) -- flatten(3) --> (batch_size, n, n_heads, dim)
+    # [Shape] xq_out: (batch_size, seq_len, n_heads, dim)
+    # [Shape] xk_out: (batch_size, seq_len, n_heads, dim)
+    # flatten 操作实例 (Shape 变化):
+    # (batch_size, seq_len, n_heads, dim // 2, 2) -flatten(3)-> (batch_size, seq_len, n_heads, dim)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
     return xq_out.type_as(xq), xk_out.type_as(xk)
