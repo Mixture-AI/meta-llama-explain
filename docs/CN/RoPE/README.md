@@ -37,7 +37,7 @@ $$
 
 其中 $\tilde{p}\_{m-n}^{\ k}$ 和 $\tilde{p}\_{m-n}^{\ v}$ 表示计算 key, value 向量时可学习的相对位置编码。
 
-我们使用 $q_m$ 和 $k_n$ 表示第 $m$ 和第 $n$ 个 token 对应的 key 向量和 query 向量。由于 self-attention 通过计算 $\langle q_m, k_n \rangle$ 来估计 token 之间的相关性，关于 value 向量的相对位置信息可以被忽略。
+我们使用 $q_m$ 和 $k_n$ 表示第 $m$ 和第 $n$ 个 token 对应的 query 向量和 key 向量。由于 self-attention 通过计算 $\langle q_m, k_n \rangle$ 来估计 token 之间的相关性，关于 value 向量的相对位置信息可以被忽略。
 
 ## What is RoPE
 
@@ -61,7 +61,7 @@ g(x_m, x_n, m - n) = Re[(W_qx_m)(W_kx_n)^*e^{i(m - n)\theta}]
 \end{gather}
 $$
 
-其中 $(W_kx_n)^\*$ 表示 $(W_kx_n)$ 的共轭复数。对于一个复数 $c = a + i\  b$, 其共轭复数表示为 $c^* = a - i\  b$。为了方便理解，我们先做一些简单的标记。对于2维词嵌入 $x_m = [x_m^1 \\ x_m^2]$, 我们使用 $q_m= [q_m^1 \\ q_m^2]$ 来表示经过 query 变换的词嵌入。同样，我们使用 $k_n= [k_n^1 \\ k_n^2]$ 来表示经过 key 变换的词嵌入。根据欧拉公式 $e^{ix} = \cos x + i \sin x$, 我们将这些2维向量视作复数 (第 1 维视为复数的实部，第 2 维视为复数的虚部)，如 $q_m = q_m^1 + i\ q_m^2$, 将 RoPE 的位置编码方式展开：
+其中 $(W_kx_n)^\*$ 表示 $(W_kx_n)$ 的共轭复数，对于一个复数 $c = a + i\  b$, 其共轭复数表示为 $c^* = a - i\  b$， $Re$ 则表示复数的实部。为了方便理解，我们先做一些简单的标记。对于2维词嵌入 $x_m = [x_m^1 \\ x_m^2]$, 我们使用 $q_m= [q_m^1 \\ q_m^2]$ 来表示经过 query 变换的词嵌入。同样，我们使用 $k_n= [k_n^1 \\ k_n^2]$ 来表示经过 key 变换的词嵌入。根据欧拉公式 $e^{ix} = \cos x + i \sin x$, 我们将这些2维向量视作复数 (第 1 维视为复数的实部，第 2 维视为复数的虚部)，如 $q_m = q_m^1 + i\ q_m^2$, 将 RoPE 的位置编码方式展开：
 
 $$
 \begin{gather}
@@ -71,7 +71,7 @@ f_q(x_m, m) &=& (W_qx_m)e^{im\theta} \\
 \end{gather}
 $$
 
-将复数结果重新视为向量，可得
+将复数结果重新视为向量，即将复数的实部作为向量的第 1 维，复数的虚部作为向量的第 2 维，可得
 
 $$
 \begin{gather}
@@ -81,7 +81,7 @@ f_q(x_m, m) &=& \begin{bmatrix} q_m^1\cos m\theta - q_m^2\sin m\theta \\\ q_m^1\
 \end{gather}
 $$
 
-也就是说，我们可以将 RoPE 视为对经过 query, key 变换后的词嵌入做了一个角度由其位置决定的旋转变换，那么对于使用 RoPE 的 query 向量和 key 向量的内积，可以得到：
+其中 $R(m\theta)$ 表示旋转角度为 $m\theta$ 的旋转矩阵，也就是说，我们可以将 RoPE 视为对经过 query, key 变换后的词嵌入做了一个角度由其位置决定的旋转变换，那么对于使用 RoPE 的 query 向量和 key 向量的内积，可以得到：
 
 $$
 \begin{gather}
