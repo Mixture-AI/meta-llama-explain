@@ -134,7 +134,7 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
 
     Args:
         freqs_cis (torch.Tensor): 需要 reshape 的频率张量. Shape: (end, dim / 2).
-        x (torch.Tensor): 目标张量，用于确保广播兼容性. Shape: (batch_size, n, n_heads, dim / 2).
+        x (torch.Tensor): 目标张量，用于确保广播兼容性. Shape: (batch_size, seq_len, n_heads, dim / 2).
             注意, 该张量为复数张量.
 
     Returns:

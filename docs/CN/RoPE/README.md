@@ -1,5 +1,5 @@
 # RoPE
-**RoPE** (Rotary Position Embedding, 旋转位置编码) 是一种能够将相对位置信息集成到 self-attention 中的一种位置编码方式。 LLAMA 也采用 RoPE 作为位置编码的方式。
+**RoPE** (Rotary Position Embedding, 旋转位置编码) 是一种能够将**相对位置信息**集成到 self-attention 中的一种位置编码方式。 Llama 也采用 RoPE 作为位置编码的方式。
 
 ## What is position encoding?
 
@@ -13,7 +13,7 @@ v_n = f_v(x_n, n)
 \end{gather}
 $$
 
-其中 $q_m$ 表示第 $m$ 个 token 对应的词嵌入 $x_m$ 加入位置信息 $m$ 后得到的 query 向量。同理，$k_n, v_n$ 分别表示第 $n$ 个 token 对应的词嵌入 $x_n$ 加入位置信息 $n$ 后得到的 key 和 value 向量。
+其中 $q_m$ 表示第 $m$ 个 token 对应的词嵌入 $x_m$ 加入位置信息 $m$ 后得到的 query 向量。同理， $k_n, v_n$ 分别表示第 $n$ 个 token 对应的词嵌入 $x_n$ 加入位置信息 $n$ 后得到的 key 和 value 向量。
 
 绝对位置编码 (absolute position encoding/embedding) 顾名思义就是将 token 的绝对位置信息编码进对应的 query, key, value 向量中，可以表示为：
 
@@ -51,7 +51,7 @@ $$
 \end{gather}
 $$
 
-首先考虑向量维度为2的情形，RoPE 提出了一种满足上式的编码方式：
+首先考虑向量维度为 2 的情形，RoPE 提出了一种满足上式的编码方式：
 
 $$
 \begin{gather}
@@ -61,7 +61,7 @@ g(x_m, x_n, m - n) = Re[(W_qx_m)(W_kx_n)^*e^{i(m - n)\theta}]
 \end{gather}
 $$
 
-其中 $(W_kx_n)^\*$ 表示 $(W_kx_n)$ 的共轭复数。对于一个复数 $c = a + i\  b$, 其共轭复数表示为 $c^* = a - i\  b$。为了方便理解，我们先做一些简单的标记。对于2维词嵌入 $x_m = [x_m^1 \\ x_m^2]$, 我们使用 $q_m= [q_m^1 \\ q_m^2]$ 来表示经过 query 变换的词嵌入。同样，我们使用 $k_n= [k_n^1 \\ k_n^2]$ 来表示经过 key 变换的词嵌入。根据欧拉公式 $e^{ix} = \cos x + i \sin x$, 我们将这些2维向量视作复数 (第1维视为复数的实部，第2维视为复数的虚部)，如 $q_m = q_m^1 + i\ q_m^2$, 将 RoPE 的位置编码方式展开：
+其中 $(W_kx_n)^\*$ 表示 $(W_kx_n)$ 的共轭复数。对于一个复数 $c = a + i\  b$, 其共轭复数表示为 $c^* = a - i\  b$。为了方便理解，我们先做一些简单的标记。对于2维词嵌入 $x_m = [x_m^1 \\ x_m^2]$, 我们使用 $q_m= [q_m^1 \\ q_m^2]$ 来表示经过 query 变换的词嵌入。同样，我们使用 $k_n= [k_n^1 \\ k_n^2]$ 来表示经过 key 变换的词嵌入。根据欧拉公式 $e^{ix} = \cos x + i \sin x$, 我们将这些2维向量视作复数 (第 1 维视为复数的实部，第 2 维视为复数的虚部)，如 $q_m = q_m^1 + i\ q_m^2$, 将 RoPE 的位置编码方式展开：
 
 $$
 \begin{gather}
@@ -103,7 +103,7 @@ R(a + b) = R(a)R(b), \qquad R^T(a) = R^{-1}(a)
 \end{gather}
 $$
 
-最后，我们再推导一下上文提到的 RoPE 在向量维度为2的情形下的 query 向量和 key 向量内积的表达式:
+最后，我们再推导一下上文提到的 RoPE 在向量维度为 2 的情形下的 query 向量和 key 向量内积的表达式:
 
 $$
 \begin{gather}
