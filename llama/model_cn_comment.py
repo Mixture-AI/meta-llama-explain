@@ -195,6 +195,8 @@ def apply_rotary_emb(
     # 实现 R(θ)d, 也就是对每一组二维张量做对应角度的旋转, 从而实现 RoPE (旋转位置编码).
     # [Shape] xq_out: (batch_size, n, n_heads, dim)
     # [Shape] xk_out: (batch_size, n, n_heads, dim)
+    # flatten 操作实例 (Shape 变化): 
+    # (batch_size, n, n_heads, dim // 2, 2) -- flatten(3) --> (batch_size, n, n_heads, dim)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
     return xq_out.type_as(xq), xk_out.type_as(xk)
