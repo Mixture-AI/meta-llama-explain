@@ -113,8 +113,8 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     t = torch.arange(end, device=freqs.device)
 
     # 通过向量外积的操作采样所有位置对应维度的旋转角度.
-    # 即对于 t 中的每一个位置 m 和 freqs 中的每一组维度对应的角度基 θ_i,
-    # 采样出对应位置和维度的旋转角度 mθ_i.
+    # 即对于 t 中的每一个位置 pos_i 和 freqs 中的每一组维度对应的角度基 θ_j,
+    # 采样出对应位置和维度的旋转角度 pos_i * θ_j.
     # [Shape] freqs: (end, dim / 2)
     freqs = torch.outer(t, freqs).float()
 
