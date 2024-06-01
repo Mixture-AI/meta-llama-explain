@@ -88,7 +88,7 @@ class RMSNorm(torch.nn.Module):
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     """根据指定维度预计算复指数 (cis) 的频率张量. 
     
-    cis 是一种用于缩略表示欧拉公式的数学标记: cis x = cos x + i sin x.
+    cis 是一种用于缩略表示欧拉公式的数学标记: cis(x) = cos(x) + i sin(x).
     该函数根据给定的维度 dim 和结束索引 end, 计算一个复指数的频率张量.
     theta 参数用于缩放频率.
     返回的张量包含复数值，数据类型为 complex64.
