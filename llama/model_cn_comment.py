@@ -26,9 +26,8 @@ class ModelArgs:
     n_heads: int = 32
     n_kv_heads: Optional[int] = None
     vocab_size: int = -1  # 后续由 tokenizer 定义.
-    multiple_of: int = (
-        256  # 使 SwiGLU 隐藏层的尺寸为较大的 2 的幂的整数倍.
-    )
+    # TODO [NAN]: Add a doc for SwiGLU.
+    multiple_of: int = 256  # 使 SwiGLU 隐藏层的尺寸为较大的 2 的幂的整数倍.
     ffn_dim_multiplier: Optional[float] = None
     norm_eps: float = 1e-5
 
@@ -203,7 +202,7 @@ def apply_rotary_emb(
 
 
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
-    """在 n_kv_heads 维度上重复扩展 key 或 query 张量。
+    """在 n_kv_heads 维度上重复扩展 key 或 query 张量.
 
     Args:
         x (torch.Tensor): 输入张量, Shape: (batch_size, sequence_length, n_kv_heads, head_dim).
@@ -349,17 +348,18 @@ class Attention(nn.Module):
         # 使 query, key, value 的尺寸匹配.
         # Q: 为什么会出现 n_kv_heads < n_heads 的情况？
         # A: 当 transformer 层采用 Grouped-Query Attention 时会出现 n_kv_heads < n_heads 的情况.
-        # 即多个 query head 共享一对 key head 和 value head, 来减小 KV-Cache, 因此 n_heads 一定能被 n_kv_heads 整除. 
-        # [Shape] keys: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
+        # 即多个 query head 共享一对 key head 和 value head, 来减小 KV-Cache,
+        # 因此 n_heads 一定能被 n_kv_heads 整除.
+        # [Shape] keys: (batch_size, cache_len + seq_len, n_local_heads, head_dim)
         keys = repeat_kv(keys, self.n_rep)
-        # [Shape] values: (batch_size, cache_len + seqlen, n_local_heads, head_dim)
+        # [Shape] values: (batch_size, cache_len + seq_len, n_local_heads, head_dim)
         values = repeat_kv(values, self.n_rep)
 
-        # [Shape] xq: (batch_size, n_local_heads, seqlen, head_dim)
+        # [Shape] xq: (batch_size, n_local_heads, seq_len, head_dim)
         xq = xq.transpose(1, 2)
-        # [Shape] keys: (batch_size, n_local_heads, cache_len + seqlen, head_dim)
+        # [Shape] keys: (batch_size, n_local_heads, cache_len + seq_len, head_dim)
         keys = keys.transpose(1, 2)
-        # [Shape] values: (batch_size, n_local_heads, cache_len + seqlen, head_dim)
+        # [Shape] values: (batch_size, n_local_heads, cache_len + seq_len, head_dim)
         values = values.transpose(1, 2)
         # 计算 attention scores.
         scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
@@ -371,9 +371,9 @@ class Attention(nn.Module):
         # 使用 softmax 归一化 attention scores.
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         # 使用 attention scores 聚合 values 向量.
-        # [Shape] output: (batch_size, n_local_heads, seqlen, head_dim)
+        # [Shape] output: (batch_size, n_local_heads, seq_len, head_dim)
         output = torch.matmul(scores, values)
-        # [Shape] output: (batch_size, seqlen, dim)
+        # [Shape] output: (batch_size, seq_len, dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         # 对输出执行一次线性变换.
         return self.wo(output)
@@ -486,7 +486,7 @@ class TransformerBlock(nn.Module):
         """执行 TransformerBlock 的前向过程.
 
         Args:
-            x (torch.Tensor): 输入张量. Shape: (batch_size, seqlen, dim).
+            x (torch.Tensor): 输入张量. Shape: (batch_size, seq_len, dim).
             start_pos (int): Attention caching 的起始位置.
             freqs_cis (torch.Tensor): 预计算的复指数频率张量.
             mask (torch.Tensor, optional): 计算 attention 时的 mask. 默认设为 None.
@@ -496,12 +496,12 @@ class TransformerBlock(nn.Module):
 
         """
         # 残差计算 attention.
-        # [Shape] h: (batch_size, seqlen, dim)
+        # [Shape] h: (batch_size, seq_len, dim)
         h = x + self.attention(
             self.attention_norm(x), start_pos, freqs_cis, mask
         )
         # 残差计算 FeedForward.
-        # [Shape] out: (batch_size, seqlen, dim)
+        # [Shape] out: (batch_size, seq_len, dim)
         out = h + self.feed_forward(self.ffn_norm(h))
         return out
 
@@ -578,7 +578,7 @@ class Transformer(nn.Module):
         mask = None
         # 若序列长度大于 1, 则需要计算用于 Attention 的 mask.
         if seqlen > 1:
-            # 首先根据序列长度构建一个 [seqlen, seqlen] 的矩阵, 每一个元素的值均为 -inf.
+            # 首先根据序列长度构建一个 [seq_len, seq_len] 的矩阵, 每一个元素的值均为 -inf.
             mask = torch.full(
                 (seqlen, seqlen), float("-inf"), device=tokens.device
             )
@@ -586,20 +586,15 @@ class Transformer(nn.Module):
             # 保留该矩阵的上三角部分, 不保留主对角线的值, 即主对角线右上部分的元素保持为 -inf,
             # 其余元素均为0.
             # 表示每个 token 只能使用当前 token 以及已经处理过的 token 的信息.
-            # e.g. mask matrix:
-            # ┌         ┐ 
-            # │ 0 -∞ -∞ │
-            # │ 0  0 -∞ │ 
-            # │ 0  0  0 │
-            # └         ┘
+
             mask = torch.triu(mask, diagonal=1)
 
             # 由于使用了 key-value caching, 我们只需要为新序列计算 attention scores.
-            # 因此, 我们需要计算的 attention scores 的尺寸为 (seqlen, cache_len + seqlen).
+            # 因此, 我们需要计算的 attention scores 的尺寸为 (seq_len, cache_len + seq_len).
             # 那么我们需要 mask 的元素 (i, j) 当 j > cache_len + i. 实际操作时, 我们只需要
-            # 在先前计算的尺寸为 [seqlen, seqlen] 的 mask 矩阵前补上 cached 部分, 即
+            # 在先前计算的尺寸为 [seq_len, seq_len] 的 mask 矩阵前补上 cached 部分, 即
             # 起始位置前的部分, 这一部分的所有元素都不需要被 mask, 所以只需要拼接上一个
-            # 尺寸为 (seqlen, start_pos) 的全零矩阵即可.
+            # 尺寸为 (seq_len, start_pos) 的全零矩阵即可.
             # ┌─────────────────────────────────────────────────────────┐
             # │ > mask maxtirx visualization                            │
             # │                                                         │
