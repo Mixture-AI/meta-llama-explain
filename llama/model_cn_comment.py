@@ -26,6 +26,7 @@ class ModelArgs:
     n_heads: int = 32
     n_kv_heads: Optional[int] = None
     vocab_size: int = -1  # 后续由 tokenizer 定义.
+    # TODO [NAN]: Add a doc for SwiGLU.
     multiple_of: int = 256  # 使 SwiGLU 隐藏层的尺寸为较大的 2 的幂的整数倍.
     ffn_dim_multiplier: Optional[float] = None
     norm_eps: float = 1e-5
