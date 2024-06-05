@@ -31,7 +31,7 @@ Tokenize 的原理我认为是 NLP/LLM 领域的 Meta Knowledge 之一。而 BPE
 
 这个问题可以参考论文中的解释。，
 
-*“--- The main difference to other compression algorithms, such as Huffman encoding, which have been proposed to produce a variable-length encoding of words for NMT (Chitnis and DeNero, 2015), is that our symbol sequences are still interpretable as subword units, and that the network can generalize to translate and produce new words (unseen at training time) on the basis of these subword units.” 《Neural Machine Translation of Rare Words with Subword Units》Section2.2*
+*“--- The main difference to other compression algorithms, such as Huffman encoding, which have been proposed to produce a variable-length encoding of words for NMT (Chitnis and DeNero, 2015), is that our symbol sequences are still interpretable as subword units, and that the network can generalize to translate and produce new words (unseen at training time) on the basis of these subword units.”* **《Neural Machine Translation of Rare Words with Subword Units》Section2.2**
 
 主要区别在于，BPE 生产的**符号序列**仍然可以理解和解释为子词单位，并且模型可以基于这些子词单位推广，去理解那些没有见过（不在词表中）的新词，解决 OOV 问题。
 
