@@ -24,14 +24,14 @@ Role = Literal["system", "user", "assistant"]
 
 
 class Message(TypedDict):
-    """Basic Message class for chat messages."""
+    """用于通信消息的基本消息类."""
 
     role: Role
     content: str
 
 
 class CompletionPrediction(TypedDict, total=False):
-    """CompletionPrediction class for text completion predictions."""
+    """CompletionPrediction 类用于文本完成预测."""
 
     generation: str
     tokens: List[str]  # not required
@@ -39,7 +39,7 @@ class CompletionPrediction(TypedDict, total=False):
 
 
 class ChatPrediction(TypedDict, total=False):
-    """ChatPrediction class for chat completion predictions."""
+    """ChatPrediction 类用于聊天完成预测."""
 
     generation: Message
     tokens: List[str]  # not required
@@ -56,7 +56,7 @@ UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
 
 
 class Llama:
-    """Llama class for text generation using the language model."""
+    """Llama 类用于使用语言模型进行文本生成."""
 
     @staticmethod
     def build(
@@ -393,30 +393,23 @@ class Llama:
         logprobs: bool = False,
         echo: bool = False,
     ) -> List[CompletionPrediction]:
-        """Perform text completion for a list of prompts using the language generation model.
+        """使用语言生成模型为一组提示执行文本完成.
 
         Args:
-            prompts (List[str]): List of text prompts for completion.
-            temperature (float, optional): Temperature value for controlling randomness in
-                sampling. Defaults to 0.6.
-            top_p (float, optional): Top-p probability threshold for nucleus sampling.
-                Defaults to 0.9.
-            max_gen_len (Optional[int], optional): Maximum length of the generated completion
-                sequence. If not provided, it's set to the model's maximum sequence length minus 1.
-            logprobs (bool, optional): Flag indicating whether to compute token log probabilities.
-                Defaults to False.
-            echo (bool, optional): Flag indicating whether to include prompt tokens in the
-                generated output. Defaults to False.
+            prompts (List[str]): 用于完成的文本提示列表.
+            temperature (float, optional): 控制抽样中随机性的温度值. 默认为 0.6.
+            top_p (float, optional): 核心采样的 top-p 概率阈值. 默认为 0.9.
+            max_gen_len (Optional[int], optional): 生成完成序列的最大长度.
+                如果未提供，则设置为模型的最大序列长度减 1.
+            logprobs (bool, optional): 是否计算令牌对数概率的标志. 默认为 False.
+            echo (bool, optional): 是否在生成的输出中包含提示令牌的标志. 默认为 False.
 
         Returns:
-            List[CompletionPrediction]: List of completion predictions, each containing the
-                generated text completion.
+            List[CompletionPrediction]: 完成预测列表，每个预测包含生成的文本完成.
 
         Note:
-            This method generates text completions for the provided prompts, employing nucleus
-                sampling to introduce controlled randomness.
-            If logprobs is True, token log probabilities are computed for each generated token.
-
+            此方法为提供的提示生成文本完成，采用核心采样引入受控随机性。
+            如果 logprobs 为 True，则为每个生成的令牌计算令牌对数概率。
         """
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -452,35 +445,26 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
     ) -> List[ChatPrediction]:
-        """Generate assistant responses for a list of conversational dialogs using the language
-        generation model.
+        """使用语言生成模型为一组对话生成助手回复.
 
         Args:
-            dialogs (List[Dialog]): List of conversational dialogs, where each dialog is
-                a list of messages.
-            temperature (float, optional): Temperature value for controlling randomness in
-                sampling. Defaults to 0.6.
-            top_p (float, optional): Top-p probability threshold for nucleus sampling.
-                Defaults to 0.9.
-            max_gen_len (Optional[int], optional): Maximum length of the generated response
-                sequence. If not provided, it's set to the model's maximum sequence length minus 1.
-            logprobs (bool, optional): Flag indicating whether to compute token log probabilities.
-                Defaults to False.
+            dialogs (List[Dialog]): 对话列表，每个对话都是消息列表.
+            temperature (float, optional): 控制抽样中随机性的温度值. 默认为 0.6.
+            top_p (float, optional): 核心采样的 top-p 概率阈值. 默认为 0.9.
+            max_gen_len (Optional[int], optional): 生成响应序列的最大长度.
+                如果未提供，则设置为模型的最大序列长度减 1.
+            logprobs (bool, optional): 是否计算令牌对数概率的标志. 默认为 False.
 
         Returns:
-            List[ChatPrediction]: List of chat predictions, each containing the assistant'
-                generated response.
+            List[ChatPrediction]: 聊天预测列表，每个预测包含助手生成的回复.
 
         Raises:
-            AssertionError: If the last message in a dialog is not from the user.
-            AssertionError: If the dialog roles are not in the required 'user', 'assistant', and
-                optional 'system' order.
+            AssertionError: 如果对话中的最后一条消息不是用户发送的.
+            AssertionError: 如果对话角色不按照要求的 'user'、'assistant' 和可选的 'system' 顺序排列.
 
         Note:
-            This method generates assistant responses for the provided conversational dialogs.
-            It employs nucleus sampling to introduce controlled randomness in text generation.
-            If logprobs is True, token log probabilities are computed for each generated token.
-
+            此方法为提供的对话生成助手回复，采用核心采样引入受控随机性。
+            如果 logprobs 为 True，则为每个生成的令牌计算令牌对数概率。
         """  # noqa: D205
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1

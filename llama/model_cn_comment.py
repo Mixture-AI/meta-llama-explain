@@ -86,19 +86,19 @@ class RMSNorm(torch.nn.Module):
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    """Precompute the frequency tensor for complex exponentials (cis) with given dimensions.
+    """预计算复指数 (cis) 频率张量, 具有给定的维度.
 
-    This function calculates a frequency tensor with complex exponentials using the given dimension
-    'dim' and the end index 'end'. The 'theta' parameter scales the frequencies.
-    The returned tensor contains complex values in complex64 data type.
+    此函数使用给定的维度 'dim' 和终止索引 'end' 计算具有复指数的频率张量.
+    'theta' 参数用于缩放频率.
+    返回的张量包含 complex64 数据类型的复数值.
 
     Args:
-        dim (int): Dimension of the frequency tensor.
-        end (int): End index for precomputing frequencies.
-        theta (float, optional): Scaling factor for frequency computation. Defaults to 10000.0.
+        dim (int): 频率张量的维度.
+        end (int): 用于预计算频率的终止索引.
+        theta (float, 可选): 频率计算的缩放因子。默认值为 10000.0.
 
     Returns:
-        torch.Tensor: Precomputed frequency tensor with complex exponentials.
+        torch.Tensor: 预计算的复指数频率张量.
     """
     freqs = 1.0 / (
         theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
@@ -110,21 +110,21 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    """Reshape frequency tensor for broadcasting it with another tensor.
+    """调整频率张量的形状以便与另一个张量进行广播.
 
-    This function reshapes the frequency tensor to have the same shape as the target tensor 'x'
-    for the purpose of broadcasting the frequency tensor during element-wise operations.
+    此函数将频率张量调整为与目标张量 'x' 具有相同的形状，
+    以便在元素级操作期间广播频率张量.
 
     Args:
-        freqs_cis (torch.Tensor): Frequency tensor to be reshaped.
-        x (torch.Tensor): Target tensor for broadcasting compatibility.
+        freqs_cis (torch.Tensor): 要调整形状的频率张量.
+        x (torch.Tensor): 目标张量以实现广播兼容性.
 
     Returns:
-        torch.Tensor: Reshaped frequency tensor.
+        torch.Tensor: 调整形状后的频率张量.
 
     Raises:
-        AssertionError: If the frequency tensor doesn't match the expected shape.
-        AssertionError: If the target tensor 'x' doesn't have the expected number of dimensions.
+        AssertionError: 如果频率张量的形状不符合预期.
+        AssertionError: 如果目标张量 'x' 的维度数不符合预期.
     """
     ndim = x.ndim
     assert 0 <= 1 < ndim
@@ -138,21 +138,19 @@ def apply_rotary_emb(
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Apply rotary embeddings to input tensors using the given frequency tensor.
+    """使用给定的频率张量对输入张量应用旋转嵌入.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the
-    provided frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and
-    the frequency tensor is reshaped for broadcasting compatibility. The resulting tensors contain
-    rotary embeddings and are returned as real tensors.
+    此函数使用提供的频率张量 'freqs_cis' 对给定的查询 'xq' 和键 'xk' 张量应用旋转嵌入.
+    输入张量被重塑为复数, 并且频率张量被重塑以实现广播兼容性. 生成的张量包含旋转嵌入,
+    并作为实数张量返回.
 
     Args:
-        xq (torch.Tensor): Query tensor to apply rotary embeddings.
-        xk (torch.Tensor): Key tensor to apply rotary embeddings.
-        freqs_cis (torch.Tensor): Precomputed frequency tensor for complex exponentials.
+        xq (torch.Tensor): 要应用旋转嵌入的查询张量.
+        xk (torch.Tensor): 要应用旋转嵌入的键张量.
+        freqs_cis (torch.Tensor): 预计算的复指数频率张量.
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with
-            rotary embeddings.
+        Tuple[torch.Tensor, torch.Tensor]: 包含旋转嵌入的修改后的查询张量和键张量的元组.
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
@@ -178,24 +176,23 @@ class Attention(nn.Module):
     """Multi-Head Self-Attention (多头自注意力机制)."""
 
     def __init__(self, args: ModelArgs):
-        """Initialize the Attention module.
+        """初始化注意力模块.
 
         Args:
-            args (ModelArgs): Model configuration parameters.
+            args (ModelArgs): 模型配置参数.
 
         Attributes:
-            n_kv_heads (int): Number of key and value heads.
-            n_local_heads (int): Number of local query heads.
-            n_local_kv_heads (int): Number of local key and value heads.
-            n_rep (int): Number of repetitions for local heads.
-            head_dim (int): Dimension size of each attention head.
-            wq (ColumnParallelLinear): Linear transformation for queries.
-            wk (ColumnParallelLinear): Linear transformation for keys.
-            wv (ColumnParallelLinear): Linear transformation for values.
-            wo (RowParallelLinear): Linear transformation for output.
-            cache_k (torch.Tensor): Cached keys for attention.
-            cache_v (torch.Tensor): Cached values for attention.
-
+            n_kv_heads (int): 键和值头的数量.
+            n_local_heads (int): 本地查询头的数量.
+            n_local_kv_heads (int): 本地键和值头的数量.
+            n_rep (int): 本地头的重复次数.
+            head_dim (int): 每个注意力头的维度大小.
+            wq (ColumnParallelLinear): 查询的线性变换.
+            wk (ColumnParallelLinear): 键的线性变换.
+            wv (ColumnParallelLinear): 值的线性变换.
+            wo (RowParallelLinear): 输出的线性变换.
+            cache_k (torch.Tensor): 注意力的缓存键.
+            cache_v (torch.Tensor): 注意力的缓存值.
         """
         super().__init__()
         self.n_kv_heads = (
@@ -260,17 +257,16 @@ class Attention(nn.Module):
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
     ):
-        """Forward pass of the attention module.
+        """注意力模块的前向传递.
 
         Args:
-            x (torch.Tensor): Input tensor.
-            start_pos (int): Starting position for caching.
-            freqs_cis (torch.Tensor): Precomputed frequency tensor.
-            mask (torch.Tensor, optional): Attention mask tensor.
+            x (torch.Tensor): 输入张量.
+            start_pos (int): 缓存的起始位置.
+            freqs_cis (torch.Tensor): 预计算的频率张量.
+            mask (torch.Tensor, optional): 注意力掩码张量.
 
         Returns:
-            torch.Tensor: Output tensor after attention.
-
+            torch.Tensor: 注意力后的输出张量.
         """
         bsz, seqlen, _ = x.shape
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
@@ -330,20 +326,19 @@ class FeedForward(nn.Module):
         multiple_of: int,
         ffn_dim_multiplier: Optional[float],
     ):
-        """Initialize the FeedForward module.
+        """初始化前馈模块.
 
         Args:
-            dim (int): Input dimension.
-            hidden_dim (int): Hidden dimension of the feedforward layer.
-            multiple_of (int): Value to ensure hidden dimension is a multiple of this value.
-            ffn_dim_multiplier (float, optional): Custom multiplier for hidden dimension.
-                Defaults to None.
+            dim (int): 输入维度.
+            hidden_dim (int): 前馈层的隐藏维度.
+            multiple_of (int): 确保隐藏维度是此值的倍数.
+            ffn_dim_multiplier (float, optional): 隐藏维度的自定义倍增器.
+                默认为 None.
 
         Attributes:
-            w1 (ColumnParallelLinear): Linear transformation for the first layer.
-            w2 (RowParallelLinear): Linear transformation for the second layer.
-            w3 (ColumnParallelLinear): Linear transformation for the third layer.
-
+            w1 (ColumnParallelLinear): 第一层的线性变换.
+            w2 (RowParallelLinear): 第二层的线性变换.
+            w3 (ColumnParallelLinear): 第三层的线性变换.
         """
         super().__init__()
         hidden_dim = int(2 * hidden_dim / 3)
@@ -384,22 +379,21 @@ class TransformerBlock(nn.Module):
     """Transformer基础模块."""
 
     def __init__(self, layer_id: int, args: ModelArgs):
-        """Initialize a TransformerBlock.
+        """初始化一个 TransformerBlock.
 
         Args:
-            layer_id (int): Identifier for the layer.
-            args (ModelArgs): Model configuration parameters.
+            layer_id (int): 层的标识符.
+            args (ModelArgs): 模型配置参数.
 
         Attributes:
-            n_heads (int): Number of attention heads.
-            dim (int): Dimension size of the model.
-            head_dim (int): Dimension size of each attention head.
-            attention (Attention): Attention module.
-            feed_forward (FeedForward): FeedForward module.
-            layer_id (int): Identifier for the layer.
-            attention_norm (RMSNorm): Layer normalization for attention output.
-            ffn_norm (RMSNorm): Layer normalization for feedforward output.
-
+            n_heads (int): 注意力头的数量.
+            dim (int): 模型的维度大小.
+            head_dim (int): 每个注意力头的维度大小.
+            attention (Attention): 注意力模块.
+            feed_forward (FeedForward): 前馈模块.
+            layer_id (int): 层的标识符.
+            attention_norm (RMSNorm): 注意力输出的层归一化.
+            ffn_norm (RMSNorm): 前馈输出的层归一化.
         """
         super().__init__()
         self.n_heads = args.n_heads
@@ -423,17 +417,16 @@ class TransformerBlock(nn.Module):
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
     ):
-        """Perform a forward pass through the TransformerBlock.
+        """通过 TransformerBlock 执行前向传递.
 
         Args:
-            x (torch.Tensor): Input tensor.
-            start_pos (int): Starting position for attention caching.
-            freqs_cis (torch.Tensor): Precomputed cosine and sine frequencies.
-            mask (torch.Tensor, optional): Masking tensor for attention. Defaults to None.
+            x (torch.Tensor): 输入张量.
+            start_pos (int): 注意力缓存的起始位置.
+            freqs_cis (torch.Tensor): 预计算的余弦和正弦频率.
+            mask (torch.Tensor, optional): 注意力的掩码张量. 默认为 None.
 
         Returns:
-            torch.Tensor: Output tensor after applying attention and feedforward layers.
-
+            torch.Tensor: 应用注意力和前馈层后的输出张量.
         """
         h = x + self.attention(
             self.attention_norm(x), start_pos, freqs_cis, mask
@@ -446,21 +439,20 @@ class Transformer(nn.Module):
     """Transformer模型."""
 
     def __init__(self, params: ModelArgs):
-        """Initialize a Transformer model.
+        """初始化一个 Transformer 模型.
 
         Args:
-            params (ModelArgs): Model configuration parameters.
+            params (ModelArgs): 模型配置参数.
 
         Attributes:
-            params (ModelArgs): Model configuration parameters.
-            vocab_size (int): Vocabulary size.
-            n_layers (int): Number of layers in the model.
-            tok_embeddings (ParallelEmbedding): Token embeddings.
-            layers (torch.nn.ModuleList): List of Transformer blocks.
-            norm (RMSNorm): Layer normalization for the model output.
-            output (ColumnParallelLinear): Linear layer for final output.
-            freqs_cis (torch.Tensor): Precomputed cosine and sine frequencies.
-
+            params (ModelArgs): 模型配置参数.
+            vocab_size (int): 词汇表大小.
+            n_layers (int): 模型中的层数.
+            tok_embeddings (ParallelEmbedding): 令牌嵌入.
+            layers (torch.nn.ModuleList): Transformer 块的列表.
+            norm (RMSNorm): 模型输出的层归一化.
+            output (ColumnParallelLinear): 最终输出的线性层.
+            freqs_cis (torch.Tensor): 预计算的余弦和正弦频率.
         """
         super().__init__()
         self.params = params
@@ -481,24 +473,22 @@ class Transformer(nn.Module):
         )
 
         self.freqs_cis = precompute_freqs_cis(
-            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the
-            # Llama 2 generation of models is 4096. Adding this multiplier instead of using 4096
-            # directly allows for dynamism of token lengths while training or fine-tuning.
+            # 注意 self.params.max_seq_len 被乘以 2，因为 Llama 2 生成的模型的令牌限制为 4096。
+            # 添加此乘数而不是直接使用 4096，允许在训练或微调期间令牌长度的动态性。
             self.params.dim // self.params.n_heads,
             self.params.max_seq_len * 2,
         )
 
     @torch.inference_mode()
     def forward(self, tokens: torch.Tensor, start_pos: int):
-        """Perform a forward pass through the Transformer model.
+        """通过 Transformer 模型执行前向传递.
 
         Args:
-            tokens (torch.Tensor): Input token indices.
-            start_pos (int): Starting position for attention caching.
+            tokens (torch.Tensor): 输入令牌索引.
+            start_pos (int): 注意力缓存的起始位置.
 
         Returns:
-            torch.Tensor: Output logits after applying the Transformer model.
-
+            torch.Tensor: 应用 Transformer 模型后的输出对数.
         """
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
@@ -513,10 +503,11 @@ class Transformer(nn.Module):
 
             mask = torch.triu(mask, diagonal=1)
 
-            # When performing key-value caching, we compute the attention scores
-            # only for the new sequence. Thus, the matrix of scores is of size
-            # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-            # j > cache_len + i, since row i corresponds to token cache_len + i.
+            # 在执行键值缓存时，我们仅计算新序列的注意力分数。
+            # 因此，分数矩阵的大小为 (seqlen, cache_len + seqlen)，并且唯一的掩码条目是 (i, j)，
+            # 其中 j > cache_len + i，
+            # 因为第 i 行对应于令牌 cache_len + i。
+
             mask = torch.hstack(
                 [torch.zeros((seqlen, start_pos), device=tokens.device), mask]
             ).type_as(h)
