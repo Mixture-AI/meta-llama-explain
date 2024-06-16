@@ -24,70 +24,39 @@ Role = Literal["system", "user", "assistant"]
 
 
 class Message(TypedDict):
-    """基本的 Message 类,用于聊天消息.
-
-    Attributes:
-        role (Role): 消息的角色, 可以是 system, user, assistant.
-        content (str): 消息的内容.
-    """
+    """用于通信消息的基本消息类."""
 
     role: Role
     content: str
 
 
 class CompletionPrediction(TypedDict, total=False):
-    """CompletionPrediction 类, 用于文本补全的预测结果.
-
-    Attributes:
-        generation (str): 生成的文本.
-        tokens (List[str]): 生成的 token 列表. 可选的.
-        logprobs (List[float]): 生成的 token 的对数概率列表. 可选的.
-
-    Note:
-        `total=False` 意味着 `TypedDict` 中的字段是可选字段. 默认情况下, 所有字段都是必须的.
-
-    """
+    """CompletionPrediction 类用于文本完成预测."""
 
     generation: str
-    tokens: List[str]
-    logprobs: List[float]
+    tokens: List[str]  # not required
+    logprobs: List[float]  # not required
 
 
 class ChatPrediction(TypedDict, total=False):
-    """ChatPrediction 类, 用于会话补全的预测结果.
-
-    Attributes:
-        generation (Message): 生成的消息.
-        tokens (List[str]): 生成的 token 列表. 可选的.
-        logprobs (List[float]): 生成的 token 的对数概率列表. 可选的.
-
-    Note:
-        `total=False` 意味着 `TypedDict` 中的字段是可选字段. 默认情况下, 所有字段都是必须的.
-
-    """
+    """ChatPrediction 类用于聊天完成预测."""
 
     generation: Message
-    tokens: List[str]
-    logprobs: List[float]
+    tokens: List[str]  # not required
+    logprobs: List[float]  # not required
 
 
-# 定义对话为一个消息列表.
 Dialog = List[Message]
 
-
-# 定义一些特殊标签.
-# INST: 代表 Instruction.
-# SYS: 代表 System.
 B_INST, E_INST = "[INST]", "[/INST]"
 B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
 
-# 定义当 prompt 中包含特殊标签时抛出的错误信息.
+SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
 UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
 
 
 class Llama:
-    """Llama 类, 使用语言模型进行文本生成."""
+    """Llama 类用于使用语言模型进行文本生成."""
 
     @staticmethod
     def build(
@@ -107,7 +76,7 @@ class Llama:
             max_batch_size (int): 推理阶段能接受的最大 batch 大小.
             model_parallel_size (Optional[int], optional): 模型并行的进程数.
                 如果未提供, 则从环境中确定. 默认值为 None.
-            seed (int, optional): 随机种子, 用于结果复现. 默认种子为 1.
+            seed (int, optional): 随机种子，用于结果复现. 默认种子为 1.
 
         Returns:
             Llama: 一个加载了模型和分词器的 Llama 类实例.
@@ -179,7 +148,7 @@ class Llama:
 
         # 加载 checkpoint 文件到 CPU.
         # Q: 为什么要加载到 CPU? 为什么不直接加载到 GPU?
-        # A: 个人猜测是为了统一输出 device,保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
+        # A: 个人猜测是为了统一输出 device，保证输出一定是位于 CPU 上的, 兼容性更高也方便用户使用.
         # 否则你无法预期输出的 device 是什么, 有可能是当前进程的 GPU, 也有可能是其他进程的 GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
 
@@ -424,36 +393,29 @@ class Llama:
         logprobs: bool = False,
         echo: bool = False,
     ) -> List[CompletionPrediction]:
-        """使用语言生成模型进行文本生成.
+        """使用语言生成模型为一组提示执行文本完成.
 
         Args:
-            prompts (List[str]): 输入的 prompt 文本列表.
-            temperature (float, optional): 控制采样随机性的温度值. 默认为 0.6.
-            top_p (float, optional): nucleus 采样中的 top-p 概率阈值. 默认为 0.9.
-            max_gen_len: 最大生成长度. 如果为 None, 则设置为模型的最大序列长度减 1
-                即 (max_seq_len - 1).
-            logprobs (bool, optional): 是否计算生成的 token 的对数概率. 默认为 False.
-            echo (bool, optional): 是否在生成的序列中包含输入的 prompt. 默认为 False.
+            prompts (List[str]): 用于完成的文本提示列表.
+            temperature (float, optional): 控制抽样中随机性的温度值. 默认为 0.6.
+            top_p (float, optional): 核心采样的 top-p 概率阈值. 默认为 0.9.
+            max_gen_len (Optional[int], optional): 生成完成序列的最大长度.
+                如果未提供，则设置为模型的最大序列长度减 1.
+            logprobs (bool, optional): 是否计算令牌对数概率的标志. 默认为 False.
+            echo (bool, optional): 是否在生成的输出中包含提示令牌的标志. 默认为 False.
 
         Returns:
-            List[CompletionPrediction]: 包含生成文本的预测列表.
+            List[CompletionPrediction]: 完成预测列表，每个预测包含生成的文本完成.
 
         Note:
-            该方法使用核采样 (nucleus sampling) 为提供的文本提示生成文本补全,
-            引入受控的随机性.如果 logprobs 为 True,则计算每个生成 token 的对数概率.
-
+            此方法为提供的提示生成文本完成，采用核心采样引入受控随机性。
+            如果 logprobs 为 True，则为每个生成的令牌计算令牌对数概率。
         """
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
-
-        # 将每个 prompt 编码成 token,并在开头添加 BOS (beginning-of-sequence) token
-        # 不添加 EOS (end-of-sequence) token.
-        # 之所以不添加 EOS 是因为后续我们还需要基于该 prompt 生成文本.
         prompt_tokens = [
             self.tokenizer.encode(x, bos=True, eos=False) for x in prompts
         ]
-
-        # 使用提供的参数生成文本及对应的对数概率.
         generation_tokens, generation_logprobs = self.generate(
             prompt_tokens=prompt_tokens,
             max_gen_len=max_gen_len,
@@ -462,8 +424,6 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
         )
-
-        # 如果 logprobs 为 True, 则返回包含生成文本, 生成的 token 及其对数概率的字典列表.
         if logprobs:
             return [
                 {
@@ -473,8 +433,6 @@ class Llama:
                 }
                 for t, logprobs_i in zip(generation_tokens, generation_logprobs)
             ]
-
-        # 否则,仅返回包含生成文本的字典列表.
         return [
             {"generation": self.tokenizer.decode(t)} for t in generation_tokens
         ]
@@ -487,40 +445,32 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
     ) -> List[ChatPrediction]:
-        """使用语言生成模型为一系列对话生成回复.
+        """使用语言生成模型为一组对话生成助手回复.
 
         Args:
-            dialogs (List[Dialog]): 对话列表,其中每个对话是一个消息列表.
-            temperature (float, optional): 控制采样随机性的温度值.默认值为 0.6.
-            top_p (float, optional): nucleus 采样中的 top-p 概率阈值. 默认为 0.9.
-            max_gen_len: 最大生成长度. 如果为 None, 则设置为模型的最大序列长度减 1
-                即 (max_seq_len - 1).
-            logprobs (bool, optional): 是否计算生成的 token 的对数概率. 默认为 False.
+            dialogs (List[Dialog]): 对话列表，每个对话都是消息列表.
+            temperature (float, optional): 控制抽样中随机性的温度值. 默认为 0.6.
+            top_p (float, optional): 核心采样的 top-p 概率阈值. 默认为 0.9.
+            max_gen_len (Optional[int], optional): 生成响应序列的最大长度.
+                如果未提供，则设置为模型的最大序列长度减 1.
+            logprobs (bool, optional): 是否计算令牌对数概率的标志. 默认为 False.
 
         Returns:
-            List[ChatPrediction]: 会话预测的列表, 每个预测包含了语言模型的生成回复.
+            List[ChatPrediction]: 聊天预测列表，每个预测包含助手生成的回复.
 
         Raises:
-            AssertionError: 如果对话的最后一条消息不是来自用户则会报错.
-            AssertionError: 如果 role 的顺序不是按照 `用户`, `助手` 排列 (可能会有 `系统` 在开头)
-                则会报错.
+            AssertionError: 如果对话中的最后一条消息不是用户发送的.
+            AssertionError: 如果对话角色不按照要求的 'user'、'assistant' 和可选的 'system' 顺序排列.
 
         Note:
-            该方法为提供的对话生成回复.
-            它使用核采样 (nucleus sampling) 为文本生成引入受控的随机性.
-            如果 logprobs 为 True, 则计算每个生成 token 的对数概率.
-
+            此方法为提供的对话生成助手回复，采用核心采样引入受控随机性。
+            如果 logprobs 为 True，则为每个生成的令牌计算令牌对数概率。
         """  # noqa: D205
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
-
-        # 输入进来的 Dialog 是未经编码的文本, 需要先编码成 token.
         prompt_tokens = []
-        # 用于记录消息中是否包含特殊标签.
         unsafe_requests = []
-
         for dialog in dialogs:
-            # 为每个对话检查其消息中是否包含特殊标签.
             unsafe_requests.append(
                 any(
                     [
@@ -530,11 +480,7 @@ class Llama:
                     ]
                 )
             )
-
-            # 如果对话的第一条消息是系统消息, 则进行处理.
             if dialog[0]["role"] == "system":
-                # 这里的处理方式是将系统消息添加到用户第一条消息的开头
-                # 并使用特殊标签包裹 (B_SYS, E_SYS).
                 dialog = [
                     {
                         "role": dialog[1]["role"],
@@ -546,19 +492,12 @@ class Llama:
                         ),
                     }
                 ] + dialog[2:]
-
-            # 检查对话的角色是否按照 `用户`, `助手` 排列.
             assert all([msg["role"] == "user" for msg in dialog[::2]]) and all(
                 [msg["role"] == "assistant" for msg in dialog[1::2]]
             ), (
                 "model only supports 'system', 'user' and 'assistant' roles, "
                 "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
             )
-
-            # 每次枚举一对 (用户, 助手) 对话, 并将其编码成 token.
-            # 用 B_INST 和 E_INST 区分 prompt 和回复.
-            # `sum` 操作是将每个对话的 token 列表连接起来, 第二个参数代表初始值.
-            # eg. sum([[1, 2], [3, 4]], []) -> [1, 2, 3, 4]
             dialog_tokens: List[int] = sum(
                 [
                     self.tokenizer.encode(
@@ -573,20 +512,9 @@ class Llama:
                 ],
                 [],
             )
-
-            # 要求每个对话的最后一条消息必须来自用户.
             assert (
                 dialog[-1]["role"] == "user"
             ), f"Last message must be from user, got {dialog[-1]['role']}"
-
-            # 将最后一条用户消息编码并添加到对话 token 列表中. (注意 eos 需要设置为 False)
-            ################################################################################
-            # Q: 有人可能会疑问,前面不是枚举了所有的对话吗? 为什么这里还需要特殊处理一次呢?
-            # A: 尽管看似 zip(dialog[::2], dialog[1::2]) 已经枚举了所有的对话, 但实际上并不是这样.
-            # 这是因为, 如果对话的消息数量是奇数, 最后一条消息是不会被枚举到, `zip` 会自动截断.
-            # eg. zip([1, 4, 5], [2, 3]) -> [(1, 2), (3, 4)].
-            # 所以最后一条消息需要单独处理.
-            ################################################################################
             dialog_tokens += self.tokenizer.encode(
                 f"{B_INST} {(dialog[-1]['content']).strip()} {E_INST}",
                 bos=True,
@@ -594,7 +522,6 @@ class Llama:
             )
             prompt_tokens.append(dialog_tokens)
 
-        # 利用编码后的 tokens 生成文本及对应的对数概率.
         generation_tokens, generation_logprobs = self.generate(
             prompt_tokens=prompt_tokens,
             max_gen_len=max_gen_len,
@@ -602,8 +529,6 @@ class Llama:
             top_p=top_p,
             logprobs=logprobs,
         )
-
-        # 如果 logprobs 为 True, 则返回包含生成文本, 生成的 token 及其对数概率的字典列表.
         if logprobs:
             return [
                 {
@@ -622,8 +547,6 @@ class Llama:
                     generation_tokens, generation_logprobs, unsafe_requests
                 )
             ]
-
-        # 否则, 仅返回包含生成文本的字典列表.
         return [
             {
                 "generation": {
