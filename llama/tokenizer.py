@@ -13,9 +13,9 @@ logger = getLogger()
 
 class Tokenizer:
     """tokenizing and encoding/decoding text using SentencePiece."""
+
     def __init__(self, model_path: str):
-        """
-        Initializes the Tokenizer with a SentencePiece model.
+        """Initializes the Tokenizer with a SentencePiece model.
 
         Args:
             model_path (str): The path to the SentencePiece model file.
@@ -36,8 +36,7 @@ class Tokenizer:
         assert self.sp_model.vocab_size() == self.sp_model.get_piece_size()
 
     def encode(self, s: str, bos: bool, eos: bool) -> List[int]:
-        """
-        Encodes a string into a list of token IDs.
+        """Encodes a string into a list of token IDs.
 
         Args:
             s (str): The input string to be encoded.
@@ -56,8 +55,7 @@ class Tokenizer:
         return t
 
     def decode(self, t: List[int]) -> str:
-        """
-        Decodes a list of token IDs into a string.
+        """Decodes a list of token IDs into a string.
 
         Args:
             t (List[int]): The list of token IDs to be decoded.
