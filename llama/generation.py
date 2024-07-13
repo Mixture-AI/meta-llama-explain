@@ -176,8 +176,8 @@ class Llama:
 
         # Load the checkpoint into CPU memory.
         # Q: Why load the checkpoint into CPU memory instead of GPU memory?
-        # A: Personal guess is to unify the output device, ensuring the output is definitely on the
-        # CPU. This improves compatibility and makes it easier for users. Otherwise, you can't
+        # A: Personal guess is to unify the output device, ensuring the output is definitely on the CPU.
+        # This improves compatibility and makes it easier for users. Otherwise, you can't
         # predict the output device, it could be the current process's GPU or another process's GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
 
