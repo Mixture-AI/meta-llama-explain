@@ -347,15 +347,13 @@ class Llama:
         for cur_pos in range(min_prompt_len, total_len):
             ###############################################################################
             # Q: Why only provide tokens from [prev_pos:cur_pos]? Why not the entire tokens?
-            # A: First, prev_pos represents the position from the last processing step,
-            # initially 0.
-            # The reason for providing only the tokens from [prev_pos:cur_pos] is due to the
-            # KV Cache.
+            # A: First, prev_pos represents the position from the last processing step, initially 0.
+            # The reason for providing only the tokens from [prev_pos:cur_pos] is due to the KV Cache.
             # This way, there's no need to input the entire tokens each time.
             #
             # prev_pos mainly has two cases:
             # 1) When prev_pos = 0. This indicates the first generation step,
-            # so we need to input tokens from [0:min_prompt_len].
+            #    so we need to input tokens from [0:min_prompt_len].
             #    Compute the KV Cache for [0:min_prompt_len] and generate the next token.
             # 2) When prev_pos > 0. This means some tokens have already been generated,
             #    and cur_pos is always prev_pos + 1.
