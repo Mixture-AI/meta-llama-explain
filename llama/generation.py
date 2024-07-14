@@ -177,8 +177,8 @@ class Llama:
         # Load the checkpoint into CPU memory.
         # Q: Why load the checkpoint into CPU memory instead of GPU memory?
         # A: Personal guess is to unify the output device, ensuring the output is definitely on the CPU.
-        # This improves compatibility and makes it easier for users. Otherwise, you can't
-        # predict the output device, it could be the current process's GPU or another process's GPU.
+        # This improves compatibility and makes it easier for users. Otherwise, you can't predict 
+        # the output device, it could be the current process's GPU or another process's GPU.
         checkpoint = torch.load(ckpt_path, map_location="cpu")
 
         # Load the parameters related to the construction of the model.
@@ -352,13 +352,12 @@ class Llama:
             # This way, there's no need to input the entire tokens each time.
             #
             # prev_pos mainly has two cases:
-            # 1) When prev_pos = 0. This indicates the first generation step,
-            #    so we need to input tokens from [0:min_prompt_len].
-            #    Compute the KV Cache for [0:min_prompt_len] and generate the next token.
-            # 2) When prev_pos > 0. This means some tokens have already been generated,
-            #    and cur_pos is always prev_pos + 1.
-            #    In this case, input only one token each time, leveraging the cached KV Cache
-            #    to generate the next token.
+            # 1) When prev_pos = 0. This indicates the first generation step, so we need to input tokens
+            #    from [0:min_prompt_len]. Compute the KV Cache for [0:min_prompt_len] and generate the
+            #    next token.
+            # 2) When prev_pos > 0. This means some tokens have already been generated, and cur_pos is
+            #    always prev_pos + 1. In this case, input only one token each time, leveraging the
+            #    cached KV Cache to generate the next token.
             ###############################################################################
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
 
